@@ -156,10 +156,10 @@ function startDailyFoodScheduler(
                         );
                         await discordUser.send(
                             `⚠️ **Thông báo món ăn hôm nay**\n\n` +
-                                `❌ Không thể lấy thông tin món ăn:\n${foodData.error}\n\n` +
-                                `_Thời gian: ${new Date().toLocaleString(
-                                    "vi-VN"
-                                )}_`
+                            `❌ Không thể lấy thông tin món ăn:\n${foodData.error}\n\n` +
+                            `_Thời gian: ${new Date().toLocaleString(
+                                "vi-VN"
+                            )}_`
                         );
                     } catch (error) {
                         // Silent fail
