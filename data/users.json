@@ -1,0 +1,159 @@
+{
+    "users": [
+        {
+            "name": "Nguyễn Thị Hậu",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Lê Văn Hiếu",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Tuấn Nguyên Thành",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Lưu Văn Việt Đăng",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Phạm Ngọc Trâm",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Quách Thị Huyền Trang",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Thị Lan Anh",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Đào Thúy An",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Thị Vân",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Trần Thị Quỳnh Trang",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Ngô Phương Thảo",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Mạnh Hoàng",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Dương Hồng Tuấn",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Phạm Thị Vân Anh",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Mai Xuân Hiếu",
+            "discordId": "747134485946171403",
+            "enabled": true
+        },
+        {
+            "name": "Nguyễn Xuân Hiệp",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Văn Đức",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Ngô Mạnh Trường",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Như Đại",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Anh Đức",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Huyền Trang",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Đặng Thị Hạnh",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Nguyễn Thị Thanh Xuân",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Lê Đăng Doanh",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Trịnh Thanh Bình",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Trần Thành Nguyên",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Phùng Minh Phúc",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Đỗ Doãn Vinh",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Lê Đức Diện",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Trương Minh Phương",
+            "discordId": null,
+            "enabled": false
+        },
+        {
+            "name": "Đỗ Huy Linh",
+            "discordId": null,
+            "enabled": false
+        }
+    ]
+}

@@ -7,6 +7,13 @@ const {
 } = require("discord.js");
 const { google } = require("googleapis");
 const dotenv = require("dotenv");
+const {
+    commandData: abcCommandData,
+    handleAbcCommand,
+} = require("./commands/abc");
+const {
+    startDailyFoodScheduler,
+} = require("./scheduler/daily-food-notification");
 
 // Load environment variables
 dotenv.config();
@@ -54,16 +61,28 @@ client.once("ready", async () => {
                 .setName("help")
                 .setDescription("Xem hướng dẫn sử dụng bot")
                 .toJSON(),
+            abcCommandData, // Thêm command /abc
         ];
 
         await rest.put(Routes.applicationCommands(client.user.id), {
             body: commands,
         });
 
-        console.log("✅ Đã đăng ký slash commands: /abcom");
+        console.log("✅ Đã đăng ký slash commands: /abcom, /abc, /help");
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
     }
+
+    // Khởi động scheduler gửi thông báo món ăn hàng ngày
+    const DEFAULT_SHEET_NAME = "ĐĂNG KÝ CƠM TRƯA ABC";
+
+    startDailyFoodScheduler(
+        client,
+        DEFAULT_SHEET_NAME,
+        findNameInColumn,
+        findDateInRow,
+        getCellValue
+    );
 });
 
 // Khởi tạo Google Auth Client
@@ -583,9 +602,9 @@ client.on("interactionCreate", async (interaction) => {
                     );
                 }
             }
-        }
-
-        if (interaction.commandName === "help") {
+        } else if (interaction.commandName === "abc") {
+            await handleAbcCommand(interaction);
+        } else if (interaction.commandName === "help") {
             const helpEmbed = {
                 color: 0x0099ff,
                 title: "🤖 Bot Check Dat Com - Hướng dẫn",
