@@ -167,6 +167,18 @@ function startDailyFoodScheduler(
                     continue;
                 }
 
+                // Kiểm tra nếu món ăn là rỗng, null, undefined, hoặc "0" thì không gửi
+                const foodValue = foodData.food?.toString().trim() || "";
+                if (
+                    foodValue === "" ||
+                    foodValue === "0" ||
+                    foodValue === "(trống)" ||
+                    foodValue === "null" ||
+                    foodValue === "undefined"
+                ) {
+                    continue;
+                }
+
                 // Gửi thông báo cho user
                 await sendDailyFoodNotification(
                     client,
