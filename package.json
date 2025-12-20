@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js",
+    "debug": "node --inspect bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,5 +17,8 @@
     "dotenv": "^17.2.3",
     "googleapis": "^169.0.0",
     "pm2": "^6.0.14"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }

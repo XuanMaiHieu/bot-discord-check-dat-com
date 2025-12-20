@@ -1,0 +1,16 @@
+{
+    "watch": [
+        "bot.js",
+        "service"
+    ],
+    "ignore": [
+        "node_modules",
+        "*.log",
+        ".env"
+    ],
+    "ext": "js,json",
+    "exec": "node bot.js",
+    "env": {
+        "NODE_ENV": "development"
+    }
+}
