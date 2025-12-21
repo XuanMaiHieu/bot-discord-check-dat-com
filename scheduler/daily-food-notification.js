@@ -123,12 +123,12 @@ function startDailyFoodScheduler(
 
     cron.schedule(cronExpression, async () => {
         // Kiểm tra xem hôm nay có phải là thứ 2-6 không
-        // if (!isWeekday()) {
-        //     console.log(
-        //         `⏭️ Hôm nay không phải ngày làm việc (T2-T6), bỏ qua gửi thông báo`
-        //     );
-        //     return;
-        // }
+        if (!isWeekday()) {
+            console.log(
+                `⏭️ Hôm nay không phải ngày làm việc (T2-T6), bỏ qua gửi thông báo`
+            );
+            return;
+        }
 
         // Đọc danh sách users từ file
         const enabledUsers = loadUsersFromFile();

@@ -17,8 +17,8 @@
         },
         {
             "name": "Lưu Văn Việt Đăng",
-            "discordId": null,
-            "enabled": false
+            "discordId": "581881231931867136",
+            "enabled": true
         },
         {
             "name": "Phạm Ngọc Trâm",
@@ -57,7 +57,7 @@
         },
         {
             "name": "Nguyễn Mạnh Hoàng",
-            "discordId": null,
+            "discordId": "",
             "enabled": false
         },
         {
