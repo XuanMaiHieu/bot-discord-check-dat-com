@@ -82,7 +82,7 @@ async function sendDailyFoodNotification(client, userId, foodData) {
             `👤 **Tên:** ${foodData.name}\n` +
             `🍛 **Món ăn:** ${foodData.food}\n` +
             `📍 **Vị trí:** ${foodData.position}\n\n` +
-            `_Tự động gửi lúc 11:55 hàng ngày (Thứ 2 - Thứ 6)_`;
+            `_Tự động gửi lúc 12:00 hàng ngày (Thứ 2 - Thứ 6)_`;
 
         await user.send(message);
         return true;
@@ -118,8 +118,8 @@ function startDailyFoodScheduler(
 ) {
     // Schedule chạy vào 11h55 mỗi ngày
     // Cron format: "phút giờ * * *" (phút giờ ngày tháng thứ)
-    // 55 11 * * * = 11:55 mỗi ngày
-    const cronExpression = "55 11 * * *";
+    // 00 12 * * * = 12:00 mỗi ngày
+    const cronExpression = "00 12 * * *";
 
     cron.schedule(cronExpression, async () => {
         // Kiểm tra xem hôm nay có phải là thứ 2-6 không

@@ -74,7 +74,7 @@ client.once("ready", async () => {
     }
 
     // Khởi động scheduler gửi thông báo món ăn hàng ngày
-    const DEFAULT_SHEET_NAME = "ĐĂNG KÝ CƠM TRƯA ABC";
+    const DEFAULT_SHEET_NAME = process.env.DEFAULT_SHEET_NAME;
 
     startDailyFoodScheduler(
         client,
@@ -511,7 +511,7 @@ async function processSearchResult(
 
 client.on("interactionCreate", async (interaction) => {
     if (interaction.isChatInputCommand()) {
-        const DEFAULT_SHEET_NAME = "ĐĂNG KÝ CƠM TRƯA ABC";
+        const DEFAULT_SHEET_NAME = process.env.DEFAULT_SHEET_NAME;
 
         if (interaction.commandName === "abcom") {
             await interaction.deferReply();
@@ -629,7 +629,7 @@ client.on("interactionCreate", async (interaction) => {
                     },
                     {
                         name: "⚙️ Thông tin",
-                        value: '• **Sheet mặc định**: "ĐĂNG KÝ CƠM TRƯA ABC"\n• Bot tự động tìm kiếm không phân biệt hoa thường và dấu',
+                        value: '• **Sheet mặc định**: "ĐĂNG KÝ CƠM TRƯA ABC T12"\n• Bot tự động tìm kiếm không phân biệt hoa thường và dấu',
                         inline: false,
                     },
                 ],
