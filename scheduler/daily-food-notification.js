@@ -96,6 +96,14 @@ function loadUsersFromFile() {
     try {
         const usersFilePath = path.join(__dirname, "../data/users.json");
         const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
+        // const usersData = [
+
+        //     {
+        //         "name": "Mai Xuân Hiếu",
+        //         "discordId": "747134485946171403",
+        //         "enabled": true
+        //     },
+        // ]
 
         // Lọc ra các user có enabled: true và có discordId
         const enabledUsers = usersData.users.filter(
