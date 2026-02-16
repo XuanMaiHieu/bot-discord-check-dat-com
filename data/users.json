@@ -13,12 +13,12 @@
         {
             "name": "Tuấn Nguyên Thành",
             "discordId": "374878362944012290",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Lưu Văn Việt Đăng",
             "discordId": "581881231931867136",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Phạm Ngọc Trâm",
@@ -58,7 +58,7 @@
         {
             "name": "Nguyễn Mạnh Hoàng",
             "discordId": "255667058849742848",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Dương Hồng Tuấn",
@@ -83,7 +83,7 @@
         {
             "name": "Nguyễn Văn Đức",
             "discordId": "711211764653752341",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Ngô Mạnh Trường",
@@ -93,12 +93,12 @@
         {
             "name": "Nguyễn Như Đại",
             "discordId": "1042441565941022872",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Nguyễn Anh Đức",
             "discordId": "683847546908704778",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Nguyễn Huyền Trang",
@@ -133,7 +133,7 @@
         {
             "name": "Phùng Minh Phúc",
             "discordId": "641277742821801995",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Đỗ Doãn Vinh",

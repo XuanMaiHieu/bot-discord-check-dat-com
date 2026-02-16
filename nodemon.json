@@ -1,7 +1,7 @@
 {
     "watch": [
-        "bot.js",
-        "service"
+        "**/*.js",
+        "**/*.json"
     ],
     "ignore": [
         "node_modules",
