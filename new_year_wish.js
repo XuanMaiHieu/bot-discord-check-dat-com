@@ -31,9 +31,9 @@ async function sendNewYearWishes() {
             const discordUser = await client.users.fetch(user.discordId);
             await discordUser.send(
                 `🌸 Chúc mừng năm mới, thay mặt e Hiếu, bot check đặt cơm xin chúc anh em và gia đình năm mới an khang thịnh vượng, sức khoẻ dồi dào, công việc thuận lợi và,\n` +
-                    `✨ Vạn sự như ý, tỉ sự như mơ 🏮\n` +
-                    `🌈 Triệu triệu bất ngờ, hàng giờ hạnh phúc 🧧\n\n` +
-                    `Xin chúc mừng năm mới 🌸🌸🌸 ✨🌟🎊`
+                `✨ Vạn sự như ý, tỉ sự như mơ 🏮\n` +
+                `🌈 Triệu triệu bất ngờ, hàng giờ hạnh phúc 🧧\n\n` +
+                `Xin chúc mừng năm mới 🌸🌸🌸 ✨🌟🎊`
             );
             console.log(`✅ Đã gửi tin nhắn tới ${user.name}`);
         } catch (error) {
@@ -49,19 +49,8 @@ async function sendNewYearWishes() {
 
 // Lên lịch vào 00:01 ngày 17/02/2026
 // Cron format: minute hour day month day-of-week
-// cron.schedule(
-//     "1 0 17 2 *",
-//     async () => {
-//         console.log("⏰ Đã đến giờ! Đang gửi lời chúc năm mới...");
-//         await sendNewYearWishes();
-//     },
-//     {
-//         timezone: "Asia/Ho_Chi_Minh",
-//     }
-// );
-
 cron.schedule(
-    "50 13 16 2 *",
+    "1 0 17 2 *",
     async () => {
         console.log("⏰ Đã đến giờ! Đang gửi lời chúc năm mới...");
         await sendNewYearWishes();
@@ -70,6 +59,17 @@ cron.schedule(
         timezone: "Asia/Ho_Chi_Minh",
     }
 );
+
+// cron.schedule(
+//     "59 13 16 2 *",
+//     async () => {
+//         console.log("⏰ Đã đến giờ! Đang gửi lời chúc năm mới...");
+//         await sendNewYearWishes();
+//     },
+//     {
+//         timezone: "Asia/Ho_Chi_Minh",
+//     }
+// );
 
 client.once("ready", () => {
     console.log(`✅ Bot thông báo đã sẵn sàng! (${client.user.tag})`);
