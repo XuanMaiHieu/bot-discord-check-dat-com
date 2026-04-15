@@ -16,7 +16,7 @@
             "name": "Lưu Văn Việt Đăng",
             "discordId": "581881231931867136",
             "enabled": true,
-            "football_notify": false
+            "football_notify": true
         },
         {
             "name": "Phạm Ngọc Trâm",
@@ -52,7 +52,7 @@
             "name": "Nguyễn Mạnh Hoàng",
             "discordId": "255667058849742848",
             "enabled": true,
-            "football_notify": false
+            "football_notify": true
         },
         {
             "name": "Mai Xuân Hiếu",
@@ -88,7 +88,7 @@
             "name": "Nguyễn Anh Đức",
             "discordId": "683847546908704778",
             "enabled": true,
-            "football_notify": false
+            "football_notify": true
         },
         {
             "name": "Nguyễn Huyền Trang",
