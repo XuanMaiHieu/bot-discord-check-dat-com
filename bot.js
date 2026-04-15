@@ -12,8 +12,14 @@ const {
     handleAbcCommand,
 } = require("./commands/abc");
 const {
+    fbdateCommand,
+    fbnameCommand,
+    handleFootballCommands,
+} = require("./commands/football");
+const {
     startDailyFoodScheduler,
 } = require("./scheduler/daily-food-notification");
+const { startFootballScheduler } = require("./scheduler/football-notification");
 
 // Load environment variables
 dotenv.config();
@@ -62,6 +68,8 @@ client.once("ready", async () => {
                 .setDescription("Xem hướng dẫn sử dụng bot")
                 .toJSON(),
             abcCommandData, // Thêm command /abc
+            fbdateCommand, // Thêm command /fbdate
+            fbnameCommand, // Thêm command /fbname
         ];
 
         await rest.put(Routes.applicationCommands(client.user.id), {
@@ -83,6 +91,9 @@ client.once("ready", async () => {
         findDateInRow,
         getCellValue
     );
+
+    // Khởi động scheduler gửi thông báo bóng đá
+    startFootballScheduler(client);
 });
 
 // Khởi tạo Google Auth Client
@@ -277,8 +288,8 @@ async function getCellValue(sheetName, column, row) {
         const response = await sheets.spreadsheets.values.get(request);
         const value =
             response.data.values &&
-                response.data.values[0] &&
-                response.data.values[0][0]
+            response.data.values[0] &&
+            response.data.values[0][0]
                 ? response.data.values[0][0]
                 : "";
 
@@ -549,14 +560,16 @@ client.on("interactionCreate", async (interaction) => {
                     const item = result.data[i];
                     if (item.value !== undefined) {
                         // Có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
-                            })\n`;
+                        output += `**${i + 1}. ${item.name}** (dòng ${
+                            item.row
+                        })\n`;
                         output += `   📅 Ngày: ${item.day} | Vị trí: ${item.position}\n`;
                         output += `   🍽️ Món ăn: ${item.value}\n\n`;
                     } else {
                         // Không có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
-                            })\n`;
+                        output += `**${i + 1}. ${item.name}** (dòng ${
+                            item.row
+                        })\n`;
                         if (
                             item.valuesWithDates &&
                             item.valuesWithDates.length > 0
@@ -636,6 +649,11 @@ client.on("interactionCreate", async (interaction) => {
                 timestamp: new Date(),
             };
             await interaction.reply({ embeds: [helpEmbed] });
+        } else if (
+            interaction.commandName === "fbdate" ||
+            interaction.commandName === "fbname"
+        ) {
+            await handleFootballCommands(interaction);
         }
     }
 });
@@ -693,7 +711,8 @@ async function startBot(retryCount = 0, maxRetries = 5) {
 
                 if (retryCount < maxRetries && waitSeconds < 3600) {
                     console.log(
-                        `🔄 Retry sau ${waitSeconds}s (${retryCount + 1
+                        `🔄 Retry sau ${waitSeconds}s (${
+                            retryCount + 1
                         }/${maxRetries})`
                     );
                     setTimeout(() => {
@@ -717,7 +736,8 @@ async function startBot(retryCount = 0, maxRetries = 5) {
         ) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
             console.log(
-                `🔄 Retry sau ${delay / 1000}s (${retryCount + 1
+                `🔄 Retry sau ${delay / 1000}s (${
+                    retryCount + 1
                 }/${maxRetries})`
             );
             setTimeout(() => {
