@@ -277,8 +277,8 @@ async function getCellValue(sheetName, column, row) {
         const response = await sheets.spreadsheets.values.get(request);
         const value =
             response.data.values &&
-            response.data.values[0] &&
-            response.data.values[0][0]
+                response.data.values[0] &&
+                response.data.values[0][0]
                 ? response.data.values[0][0]
                 : "";
 
@@ -549,16 +549,14 @@ client.on("interactionCreate", async (interaction) => {
                     const item = result.data[i];
                     if (item.value !== undefined) {
                         // Có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${
-                            item.row
-                        })\n`;
+                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
+                            })\n`;
                         output += `   📅 Ngày: ${item.day} | Vị trí: ${item.position}\n`;
                         output += `   🍽️ Món ăn: ${item.value}\n\n`;
                     } else {
                         // Không có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${
-                            item.row
-                        })\n`;
+                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
+                            })\n`;
                         if (
                             item.valuesWithDates &&
                             item.valuesWithDates.length > 0
@@ -583,7 +581,7 @@ client.on("interactionCreate", async (interaction) => {
             // Xử lý một kết quả
             if (result.data.value !== undefined) {
                 await interaction.editReply(
-                    `📊 **Tên:** ${result.data.name}\n**Ngày:** ${result.data.day}\n**Vị trí:** ${result.data.position}\n**Món ăn:** ${result.data.value}`
+                    `📊**Món ăn:** ${result.data.value}\n **Tên:** ${result.data.name}\n**Ngày:** ${result.data.day}\n**Vị trí:** ${result.data.position}\n`
                 );
             } else {
                 if (
@@ -695,8 +693,7 @@ async function startBot(retryCount = 0, maxRetries = 5) {
 
                 if (retryCount < maxRetries && waitSeconds < 3600) {
                     console.log(
-                        `🔄 Retry sau ${waitSeconds}s (${
-                            retryCount + 1
+                        `🔄 Retry sau ${waitSeconds}s (${retryCount + 1
                         }/${maxRetries})`
                     );
                     setTimeout(() => {
@@ -720,8 +717,7 @@ async function startBot(retryCount = 0, maxRetries = 5) {
         ) {
             const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
             console.log(
-                `🔄 Retry sau ${delay / 1000}s (${
-                    retryCount + 1
+                `🔄 Retry sau ${delay / 1000}s (${retryCount + 1
                 }/${maxRetries})`
             );
             setTimeout(() => {

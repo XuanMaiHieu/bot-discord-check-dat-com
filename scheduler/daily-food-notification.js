@@ -77,12 +77,13 @@ async function sendDailyFoodNotification(client, userId, foodData) {
         }
 
         const message =
-            `🍽️ **Thông báo món ăn hôm nay**\n\n` +
-            `📅 **Ngày:** ${foodData.date}\n` +
-            `👤 **Tên:** ${foodData.name}\n` +
+            // `🍽️ **Thông báo món ăn hôm nay**\n\n` +
             `🍛 **Món ăn:** ${foodData.food}\n` +
-            `📍 **Vị trí:** ${foodData.position}\n\n` +
-            `_Tự động gửi lúc 12:00 hàng ngày (Thứ 2 - Thứ 6)_`;
+            `📅 **Ngày:** ${foodData.date}\n` +
+            `👤 **Tên:** ${foodData.name}\n`;
+
+        // `📍 **Vị trí:** ${foodData.position}\n\n` +
+        // `_Tự động gửi lúc 12:00 hàng ngày (Thứ 2 - Thứ 6)_`;
 
         await user.send(message);
         return true;
