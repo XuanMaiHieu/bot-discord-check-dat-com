@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
 // Format ngày tháng cho ESPN API
 const formatDateForESPN = (d) => {
@@ -7,6 +7,55 @@ const formatDateForESPN = (d) => {
     const d_ = String(d.getDate()).padStart(2, "0");
     return `${y}${m}${d_}`;
 };
+
+// Hàm tạo Embed cho 1 trận đấu
+function createMatchEmbed(event) {
+    const competitors = event.competitions[0].competitors;
+    const homeTeam = competitors.find((c) => c.homeAway === "home");
+    const awayTeam = competitors.find((c) => c.homeAway === "away");
+    
+    const homeName = homeTeam.team.displayName;
+    const awayName = awayTeam.team.displayName;
+    const homeLogo = homeTeam.team.logo;
+    const awayLogo = awayTeam.team.logo;
+    
+    const isCompleted = event.status.type.completed;
+    
+    const embed = new EmbedBuilder()
+        .setAuthor({ 
+            name: "Ngoại hạng Anh", 
+            iconURL: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png" 
+        })
+        .setTitle(`${homeName}  ⚔️  ${awayName}`)
+        .setThumbnail(homeLogo) // Logo đội nhà ở góc phải trên
+        .setFooter({ text: `Đội khách: ${awayName}`, iconURL: awayLogo }); // Logo đội khách ở dưới cùng
+        
+    if (isCompleted) {
+        const homeScore = homeTeam.score;
+        const awayScore = awayTeam.score;
+        embed.setColor(0x00FF00); // Xanh lá - Đã kết thúc
+        embed.addFields(
+            { name: "🏆 Tỉ số", value: `**${homeScore} - ${awayScore}**`, inline: true },
+            { name: "📌 Trạng thái", value: "Đã kết thúc", inline: true }
+        );
+    } else {
+        const time = new Date(event.date).toLocaleString("vi-VN", {
+            timeZone: "Asia/Ho_Chi_Minh",
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        });
+        embed.setColor(0x0099FF); // Xanh dương - Chưa đá
+        embed.addFields(
+            { name: "🕒 Thời gian", value: time, inline: true },
+            { name: "📌 Trạng thái", value: "Sắp diễn ra", inline: true }
+        );
+    }
+
+    return embed;
+}
 
 // Hàm lấy trận đấu của 1 ngày
 async function getMatchesByDate(dateString) {
@@ -17,31 +66,11 @@ async function getMatchesByDate(dateString) {
         
         if (!data.events || data.events.length === 0) return [];
         
-        const matches = [];
+        const embeds = [];
         data.events.forEach((event) => {
-            const competitors = event.competitions[0].competitors;
-            const homeTeam = competitors.find((c) => c.homeAway === "home");
-            const awayTeam = competitors.find((c) => c.homeAway === "away");
-            
-            const isCompleted = event.status.type.completed;
-            let resultText = "";
-            
-            if (isCompleted) {
-                const homeScore = homeTeam.score;
-                const awayScore = awayTeam.score;
-                resultText = `✅ **${homeTeam.team.shortDisplayName} ${homeScore} - ${awayScore} ${awayTeam.team.shortDisplayName}**`;
-            } else {
-                const time = new Date(event.date).toLocaleString("vi-VN", {
-                    timeZone: "Asia/Ho_Chi_Minh",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                });
-                resultText = `🕒 **${homeTeam.team.shortDisplayName} vs ${awayTeam.team.shortDisplayName}** - Lúc: ${time}`;
-            }
-            
-            matches.push(resultText);
+            embeds.push(createMatchEmbed(event));
         });
-        return matches;
+        return embeds;
     } catch (error) {
         console.error(error);
         return [];
@@ -64,7 +93,7 @@ async function getMatchesByTeam(teamName) {
         
         if (!data.events) return [];
         
-        const matches = [];
+        const embeds = [];
         data.events.forEach((event) => {
             const competitors = event.competitions[0].competitors;
             const homeTeam = competitors.find((c) => c.homeAway === "home");
@@ -72,30 +101,10 @@ async function getMatchesByTeam(teamName) {
             
             if (homeTeam.team.displayName === teamName || awayTeam.team.displayName === teamName || 
                 homeTeam.team.shortDisplayName === teamName || awayTeam.team.shortDisplayName === teamName) {
-                
-                const isCompleted = event.status.type.completed;
-                let resultText = "";
-                
-                if (isCompleted) {
-                    const homeScore = homeTeam.score;
-                    const awayScore = awayTeam.score;
-                    resultText = `✅ **${homeTeam.team.shortDisplayName} ${homeScore} - ${awayScore} ${awayTeam.team.shortDisplayName}**`;
-                } else {
-                    const time = new Date(event.date).toLocaleString("vi-VN", {
-                        timeZone: "Asia/Ho_Chi_Minh",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric"
-                    });
-                    resultText = `🕒 **${homeTeam.team.shortDisplayName} vs ${awayTeam.team.shortDisplayName}** - Lúc: ${time}`;
-                }
-                
-                matches.push(resultText);
+                embeds.push(createMatchEmbed(event));
             }
         });
-        return matches;
+        return embeds;
     } catch (error) {
         console.error(error);
         return [];
@@ -157,9 +166,8 @@ async function handleFootballCommands(interaction) {
             // It's a day of the week (0-6)
             const dayOfWeek = parseInt(dateVal);
             const currentDay = targetDate.getDay();
-            // Find the date of that day in the CURRENT week (Mon-Sun)
-            const diff = targetDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1); // Monday of current week
-            targetDate = new Date(targetDate.setDate(diff)); // Set to Monday
+            const diff = targetDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+            targetDate = new Date(targetDate.setDate(diff));
             
             if (dayOfWeek === 0) { // Sunday
                 targetDate.setDate(targetDate.getDate() + 6);
@@ -171,27 +179,39 @@ async function handleFootballCommands(interaction) {
         const dateString = formatDateForESPN(targetDate);
         const displayDate = targetDate.toLocaleDateString("vi-VN");
         
-        const matches = await getMatchesByDate(dateString);
+        const embeds = await getMatchesByDate(dateString);
         
-        if (matches.length === 0) {
+        if (embeds.length === 0) {
             await interaction.editReply(`📅 Không có trận đấu Ngoại hạng Anh nào vào ngày ${displayDate}.`);
             return;
         }
         
-        const output = `📅 **Lịch thi đấu Ngoại hạng Anh ngày ${displayDate}**\n\n` + matches.join("\n");
-        await interaction.editReply(output);
+        await interaction.editReply({ 
+            content: `📅 **Lịch thi đấu Ngoại hạng Anh ngày ${displayDate}**`,
+            embeds: embeds.slice(0, 10) 
+        });
+        
+        if (embeds.length > 10) {
+            await interaction.followUp({ embeds: embeds.slice(10, 20) });
+        }
         
     } else if (interaction.commandName === "fbname") {
         const teamName = interaction.options.getString("team");
-        const matches = await getMatchesByTeam(teamName);
+        const embeds = await getMatchesByTeam(teamName);
         
-        if (matches.length === 0) {
+        if (embeds.length === 0) {
             await interaction.editReply(`⚽ Không có lịch thi đấu của **${teamName}** trong tuần này.`);
             return;
         }
         
-        const output = `⚽ **Lịch thi đấu của ${teamName} trong tuần này**\n\n` + matches.join("\n\n");
-        await interaction.editReply(output);
+        await interaction.editReply({ 
+            content: `⚽ **Lịch thi đấu của ${teamName} trong tuần này**`,
+            embeds: embeds.slice(0, 10) 
+        });
+        
+        if (embeds.length > 10) {
+            await interaction.followUp({ embeds: embeds.slice(10, 20) });
+        }
     }
 }
 

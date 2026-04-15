@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
+const { EmbedBuilder } = require("discord.js");
 
 const TARGET_TEAMS = [
     "Arsenal",
@@ -37,6 +38,55 @@ const formatDateForESPN = (d) => {
     return `${y}${m}${d_}`;
 };
 
+// Hàm tạo Embed cho 1 trận đấu
+function createMatchEmbed(event) {
+    const competitors = event.competitions[0].competitors;
+    const homeTeam = competitors.find((c) => c.homeAway === "home");
+    const awayTeam = competitors.find((c) => c.homeAway === "away");
+    
+    const homeName = homeTeam.team.displayName;
+    const awayName = awayTeam.team.displayName;
+    const homeLogo = homeTeam.team.logo;
+    const awayLogo = awayTeam.team.logo;
+    
+    const isCompleted = event.status.type.completed;
+    
+    const embed = new EmbedBuilder()
+        .setAuthor({ 
+            name: "Ngoại hạng Anh", 
+            iconURL: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png" 
+        })
+        .setTitle(`${homeName}  ⚔️  ${awayName}`)
+        .setThumbnail(homeLogo) // Logo đội nhà
+        .setFooter({ text: `Đội khách: ${awayName}`, iconURL: awayLogo }); // Logo đội khách
+        
+    if (isCompleted) {
+        const homeScore = homeTeam.score;
+        const awayScore = awayTeam.score;
+        embed.setColor(0x00FF00); // Xanh lá
+        embed.addFields(
+            { name: "🏆 Tỉ số", value: `**${homeScore} - ${awayScore}**`, inline: true },
+            { name: "📌 Trạng thái", value: "Đã kết thúc", inline: true }
+        );
+    } else {
+        const time = new Date(event.date).toLocaleString("vi-VN", {
+            timeZone: "Asia/Ho_Chi_Minh",
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        });
+        embed.setColor(0x0099FF); // Xanh dương
+        embed.addFields(
+            { name: "🕒 Thời gian", value: time, inline: true },
+            { name: "📌 Trạng thái", value: "Sắp diễn ra", inline: true }
+        );
+    }
+
+    return embed;
+}
+
 // Lấy trận đấu của các đội top trong tuần hiện tại
 async function getWeeklyMatches() {
     try {
@@ -55,7 +105,7 @@ async function getWeeklyMatches() {
 
         if (!data.events) return [];
 
-        const matches = [];
+        const embeds = [];
 
         data.events.forEach((event) => {
             const competitors = event.competitions[0].competitors;
@@ -71,30 +121,11 @@ async function getWeeklyMatches() {
                 TARGET_TEAMS.includes(awayName);
 
             if (isTargetMatch) {
-                const isCompleted = event.status.type.completed;
-                let resultText = "";
-
-                if (isCompleted) {
-                    const homeScore = homeTeam.score;
-                    const awayScore = awayTeam.score;
-                    resultText = `✅ **${homeTeam.team.shortDisplayName} ${homeScore} - ${awayScore} ${awayTeam.team.shortDisplayName}**`;
-                } else {
-                    const time = new Date(event.date).toLocaleString("vi-VN", {
-                        timeZone: "Asia/Ho_Chi_Minh",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                    });
-                    resultText = `🕒 **${homeTeam.team.shortDisplayName} vs ${awayTeam.team.shortDisplayName}** - Lúc: ${time}`;
-                }
-
-                matches.push(resultText);
+                embeds.push(createMatchEmbed(event));
             }
         });
 
-        return matches;
+        return embeds;
     } catch (error) {
         console.error("Lỗi khi lấy dữ liệu bóng đá:", error);
         return [];
@@ -115,21 +146,25 @@ function startFootballScheduler(client) {
             return;
         }
 
-        const matches = await getWeeklyMatches();
+        const embeds = await getWeeklyMatches();
 
-        if (matches.length === 0) {
+        if (embeds.length === 0) {
             console.log("Không có trận đấu nào của Top 6 + Aston Villa trong tuần này.");
             return;
         }
 
-        const message =
-            `⚽ **Cập nhật Ngoại hạng Anh trong tuần (Top 6 + Aston Villa)** ⚽\n\n` +
-            matches.join("\n\n");
-
         for (const user of users) {
             try {
                 const discordUser = await client.users.fetch(user.discordId);
-                await discordUser.send(message);
+                await discordUser.send({
+                    content: `⚽ **Cập nhật Ngoại hạng Anh trong tuần (Top 6 + Aston Villa)** ⚽`,
+                    embeds: embeds.slice(0, 10)
+                });
+                
+                if (embeds.length > 10) {
+                    await discordUser.send({ embeds: embeds.slice(10, 20) });
+                }
+
                 // Delay 1 giây tránh rate limit
                 await new Promise((resolve) => setTimeout(resolve, 1000));
             } catch (err) {
