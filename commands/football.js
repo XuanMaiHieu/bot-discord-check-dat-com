@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 
 // Format ngày tháng cho ESPN API
 const formatDateForESPN = (d) => {
@@ -152,7 +152,7 @@ const fbnameCommand = new SlashCommandBuilder()
     .toJSON();
 
 async function handleFootballCommands(interaction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     
     if (interaction.commandName === "fbdate") {
         const dateVal = interaction.options.getString("date");
@@ -192,7 +192,7 @@ async function handleFootballCommands(interaction) {
         });
         
         if (embeds.length > 10) {
-            await interaction.followUp({ embeds: embeds.slice(10, 20) });
+            await interaction.followUp({ embeds: embeds.slice(10, 20), flags: MessageFlags.Ephemeral });
         }
         
     } else if (interaction.commandName === "fbname") {
@@ -210,7 +210,7 @@ async function handleFootballCommands(interaction) {
         });
         
         if (embeds.length > 10) {
-            await interaction.followUp({ embeds: embeds.slice(10, 20) });
+            await interaction.followUp({ embeds: embeds.slice(10, 20), flags: MessageFlags.Ephemeral });
         }
     }
 }

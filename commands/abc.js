@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 
 // Định nghĩa command /abc
 const commandData = new SlashCommandBuilder()
@@ -20,7 +20,7 @@ async function handleAbcCommand(interaction) {
         // Gửi tin nhắn cho user (trong channel hiện tại)
         await interaction.reply({
             content: `📨 **Tin nhắn tự động:**\n${aa}`,
-            ephemeral: false, // Hiển thị công khai trong channel
+            flags: MessageFlags.Ephemeral,
         });
 
         // Gửi thêm DM cho user nếu có thể
@@ -39,7 +39,7 @@ async function handleAbcCommand(interaction) {
         if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
                 content: "❌ Có lỗi xảy ra khi gửi tin nhắn!",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
     }

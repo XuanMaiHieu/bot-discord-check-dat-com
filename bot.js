@@ -2,6 +2,9 @@ const {
     Client,
     GatewayIntentBits,
     SlashCommandBuilder,
+    PermissionFlagsBits,
+    InteractionContextType,
+    MessageFlags,
     REST,
     Routes,
 } = require("discord.js");
@@ -26,6 +29,9 @@ const {
 const {
     startMonthlySheetCheckScheduler,
 } = require("./scheduler/monthly-sheet-check");
+const {
+    startWeeklyEmptyReminderScheduler,
+} = require("./scheduler/weekly-empty-reminder");
 const { updateEnvFile } = require("./utils/env-store");
 
 // Load environment variables
@@ -85,6 +91,8 @@ client.once("ready", async () => {
                 .setDescription(
                     "[Admin] Cấu hình SHEET_ID / G_SHEET_ID (gid) cho bot"
                 )
+                .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+                .setContexts([InteractionContextType.Guild])
                 .addStringOption((option) =>
                     option
                         .setName("sheet_id")
@@ -105,6 +113,8 @@ client.once("ready", async () => {
                 .setDescription(
                     "[Admin] Chạy thử kiểm tra sheet ngay và gửi kết quả qua DM"
                 )
+                .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+                .setContexts([InteractionContextType.Guild])
                 .toJSON(),
         ];
 
@@ -146,6 +156,16 @@ client.once("ready", async () => {
         resolveSheetName,
         checkMonthlySheetHealth,
         ADMIN_DISCORD_ID
+    );
+
+    // Khởi động scheduler nhắc đặt cơm: 8h sáng Thứ 2, nếu ai đó bỏ trống cả
+    // tuần (T2-T6) thì DM nhắc người đó đặt cơm
+    startWeeklyEmptyReminderScheduler(
+        client,
+        resolveSheetName,
+        findNameInColumn,
+        findDateInRow,
+        getCellValue
     );
 });
 
@@ -746,7 +766,7 @@ async function processSearchResult(
 client.on("interactionCreate", async (interaction) => {
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === "abcom") {
-            await interaction.deferReply();
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const name = interaction.options.getString("name");
             const day = interaction.options.getString("day");
@@ -871,7 +891,10 @@ client.on("interactionCreate", async (interaction) => {
                 ],
                 timestamp: new Date(),
             };
-            await interaction.reply({ embeds: [helpEmbed] });
+            await interaction.reply({
+                embeds: [helpEmbed],
+                flags: MessageFlags.Ephemeral,
+            });
         } else if (
             interaction.commandName === "fbdate" ||
             interaction.commandName === "fbname"
@@ -881,12 +904,12 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
                 await interaction.reply({
                     content: "❌ Bạn không có quyền sử dụng lệnh này.",
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const sheetIdInput = interaction.options.getString("sheet_id");
             const gidInput = interaction.options.getString("gid");
@@ -944,12 +967,12 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
                 await interaction.reply({
                     content: "❌ Bạn không có quyền sử dụng lệnh này.",
-                    ephemeral: true,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const report = await buildManualCheckReport();
 
