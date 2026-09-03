@@ -634,6 +634,33 @@ async function getLast5ValuesInRow(sheetName, row) {
         // Lấy 5 giá trị cuối cùng
         const last5 = valueWithDates.slice(-5);
 
+        // Nếu 5 giá trị cuối không chứa ngày hôm nay, liệt kê 5 giá trị bắt
+        // đầu từ hôm nay (kể cả ô trống) để dễ theo dõi hơn là chỉ xem quá khứ
+        const hasToday = last5.some((v) => isTodayDate(v.date));
+        if (!hasToday) {
+            const today = getTodayDate();
+            const todayIndex = dates.findIndex(
+                (d) => normalizeDateText(d) === today
+            );
+
+            if (todayIndex !== -1) {
+                const endIndex = Math.min(todayIndex + 5, dates.length);
+                const fromToday = [];
+                for (let i = todayIndex; i < endIndex; i++) {
+                    fromToday.push({
+                        date: dates[i] || `Cột ${numberToColumnLetter(i)}`,
+                        value: values[i] ?? "",
+                        columnIndex: i,
+                    });
+                }
+                return {
+                    valuesWithDates: fromToday,
+                    totalColumns: values.length,
+                    fromToday: true,
+                };
+            }
+        }
+
         return { valuesWithDates: last5, totalColumns: values.length };
     } catch (err) {
         console.error("❌ Lỗi khi lấy dữ liệu dòng:", err);
@@ -699,6 +726,7 @@ async function processSearchResult(
                         name: match.name,
                         row: match.row,
                         valuesWithDates: rowResult.valuesWithDates || [],
+                        fromToday: rowResult.fromToday || false,
                     });
                 }
             }
@@ -758,6 +786,7 @@ async function processSearchResult(
                 name: foundName,
                 row: foundRow,
                 valuesWithDates: rowResult.valuesWithDates || [],
+                fromToday: rowResult.fromToday || false,
             },
         };
     }
@@ -823,7 +852,10 @@ client.on("interactionCreate", async (interaction) => {
                             const valuesText = item.valuesWithDates
                                 .map((v) => formatValueWithDate(v, "   "))
                                 .join("\n");
-                            output += `   5 giá trị cuối cùng:\n${valuesText}\n\n`;
+                            const label = item.fromToday
+                                ? "5 giá trị từ hôm nay"
+                                : "5 giá trị cuối cùng";
+                            output += `   ${label}:\n${valuesText}\n\n`;
                         } else {
                             output += `   Không có dữ liệu\n\n`;
                         }
@@ -851,8 +883,11 @@ client.on("interactionCreate", async (interaction) => {
                     const valuesText = result.data.valuesWithDates
                         .map((v) => formatValueWithDate(v))
                         .join("\n");
+                    const label = result.data.fromToday
+                        ? "5 giá trị từ hôm nay"
+                        : "5 giá trị cuối cùng";
                     await interaction.editReply(
-                        `📊 **Tên:** ${result.data.name}\n**Dòng:** ${result.data.row}\n**5 giá trị cuối cùng:**\n${valuesText}`
+                        `📊 **Tên:** ${result.data.name}\n**Dòng:** ${result.data.row}\n**${label}:**\n${valuesText}`
                     );
                 }
             }
