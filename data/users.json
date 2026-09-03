@@ -26,8 +26,8 @@
         },
         {
             "name": "Đào Thúy An",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "885092693649276968",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -122,8 +122,8 @@
         },
         {
             "name": "Đỗ Doãn Vinh",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "966377786421936168",
+            "enabled": true,
             "football_notify": false
         },
         {

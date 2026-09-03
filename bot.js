@@ -344,6 +344,38 @@ async function getRow4Dates(sheetName) {
     }
 }
 
+// Hàm lấy ngày hôm nay theo format DD/MM
+function getTodayDate() {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, "0");
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    return `${day}/${month}`;
+}
+
+function normalizeDateText(dateText) {
+    const match = dateText?.toString().trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (!match) return "";
+
+    const day = String(Number(match[1])).padStart(2, "0");
+    const month = String(Number(match[2])).padStart(2, "0");
+    return `${day}/${month}`;
+}
+
+function isTodayDate(dateText) {
+    return normalizeDateText(dateText) === getTodayDate();
+}
+
+function formatValueWithDate(valueWithDate, indent = "") {
+    const value = valueWithDate.value || "(trống)";
+    const line = `${indent}${valueWithDate.date}: ${value}`;
+
+    if (!isTodayDate(valueWithDate.date)) {
+        return line;
+    }
+
+    return `${indent}👉 **${valueWithDate.date} (Hôm nay): ${value}**`;
+}
+
 // Hàm lấy toàn bộ dòng và trả về 5 giá trị cuối cùng kèm ngày
 async function getLast5ValuesInRow(sheetName, row) {
     if (!authClient) {
@@ -573,10 +605,7 @@ client.on("interactionCreate", async (interaction) => {
                             item.valuesWithDates.length > 0
                         ) {
                             const valuesText = item.valuesWithDates
-                                .map(
-                                    (v) =>
-                                        `   ${v.date}: ${v.value || "(trống)"}`
-                                )
+                                .map((v) => formatValueWithDate(v, "   "))
                                 .join("\n");
                             output += `   5 giá trị cuối cùng:\n${valuesText}\n\n`;
                         } else {
@@ -604,7 +633,7 @@ client.on("interactionCreate", async (interaction) => {
                     );
                 } else {
                     const valuesText = result.data.valuesWithDates
-                        .map((v) => `${v.date}: ${v.value || "(trống)"}`)
+                        .map((v) => formatValueWithDate(v))
                         .join("\n");
                     await interaction.editReply(
                         `📊 **Tên:** ${result.data.name}\n**Dòng:** ${result.data.row}\n**5 giá trị cuối cùng:**\n${valuesText}`
