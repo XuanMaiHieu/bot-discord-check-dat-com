@@ -10,6 +10,8 @@ const {
 } = require("discord.js");
 const { google } = require("googleapis");
 const dotenv = require("dotenv");
+const fs = require("fs");
+const path = require("path");
 const {
     commandData: abcCommandData,
     handleAbcCommand,
@@ -40,6 +42,18 @@ dotenv.config();
 // Discord ID của quản trị viên (Mai Xuân Hiếu) - người duy nhất được setup env và nhận cảnh báo
 const ADMIN_DISCORD_ID = "747134485946171403";
 
+// Tra tên đăng ký cơm trưa của 1 user dựa vào Discord ID (dùng khi /abcom bỏ trống name)
+function getUserNameByDiscordId(discordId) {
+    try {
+        const usersFilePath = path.join(__dirname, "data/users.json");
+        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
+        const user = usersData.users.find((u) => u.discordId === discordId);
+        return user ? user.name : null;
+    } catch (error) {
+        return null;
+    }
+}
+
 // Tạo client Discord
 const client = new Client({
     intents: [
@@ -68,9 +82,9 @@ client.once("ready", async () => {
                     option
                         .setName("name")
                         .setDescription(
-                            "Tên cần tìm (bắt buộc, có thể nhập một phần tên)"
+                            "Tên cần tìm (bỏ trống để tự lấy tên của bạn, có thể nhập một phần tên)"
                         )
-                        .setRequired(true)
+                        .setRequired(false)
                 )
                 .addStringOption((option) =>
                     option
@@ -797,12 +811,17 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.commandName === "abcom") {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-            const name = interaction.options.getString("name");
+            let name = interaction.options.getString("name");
             const day = interaction.options.getString("day");
 
             if (!name) {
-                await interaction.editReply("❌ Vui lòng nhập tên");
-                return;
+                name = getUserNameByDiscordId(interaction.user.id);
+                if (!name) {
+                    await interaction.editReply(
+                        "❌ Không tìm thấy tên của bạn trong hệ thống, vui lòng nhập tên thủ công"
+                    );
+                    return;
+                }
             }
 
             const resolvedSheet = await resolveSheetName();
