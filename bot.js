@@ -20,9 +20,19 @@ const {
     startDailyFoodScheduler,
 } = require("./scheduler/daily-food-notification");
 const { startFootballScheduler } = require("./scheduler/football-notification");
+const {
+    startSheetHealthCheckScheduler,
+} = require("./scheduler/sheet-health-check");
+const {
+    startMonthlySheetCheckScheduler,
+} = require("./scheduler/monthly-sheet-check");
+const { updateEnvFile } = require("./utils/env-store");
 
 // Load environment variables
 dotenv.config();
+
+// Discord ID của quản trị viên (Mai Xuân Hiếu) - người duy nhất được setup env và nhận cảnh báo
+const ADMIN_DISCORD_ID = "747134485946171403";
 
 // Tạo client Discord
 const client = new Client({
@@ -70,23 +80,49 @@ client.once("ready", async () => {
             abcCommandData, // Thêm command /abc
             fbdateCommand, // Thêm command /fbdate
             fbnameCommand, // Thêm command /fbname
+            new SlashCommandBuilder()
+                .setName("configsheet")
+                .setDescription(
+                    "[Admin] Cấu hình SHEET_ID / G_SHEET_ID (gid) cho bot"
+                )
+                .addStringOption((option) =>
+                    option
+                        .setName("sheet_id")
+                        .setDescription("ID của Google Spreadsheet (SHEET_ID)")
+                        .setRequired(false)
+                )
+                .addStringOption((option) =>
+                    option
+                        .setName("gid")
+                        .setDescription(
+                            "GID của tab trong URL, vd: .../edit?gid=750327783 (G_SHEET_ID)"
+                        )
+                        .setRequired(false)
+                )
+                .toJSON(),
+            new SlashCommandBuilder()
+                .setName("testsheetcheck")
+                .setDescription(
+                    "[Admin] Chạy thử kiểm tra sheet ngay và gửi kết quả qua DM"
+                )
+                .toJSON(),
         ];
 
         await rest.put(Routes.applicationCommands(client.user.id), {
             body: commands,
         });
 
-        console.log("✅ Đã đăng ký slash commands: /abcom, /abc, /help");
+        console.log(
+            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck"
+        );
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
     }
 
     // Khởi động scheduler gửi thông báo món ăn hàng ngày
-    const DEFAULT_SHEET_NAME = process.env.DEFAULT_SHEET_NAME;
-
     startDailyFoodScheduler(
         client,
-        DEFAULT_SHEET_NAME,
+        resolveSheetName,
         findNameInColumn,
         findDateInRow,
         getCellValue
@@ -94,6 +130,23 @@ client.once("ready", async () => {
 
     // Khởi động scheduler gửi thông báo bóng đá
     startFootballScheduler(client);
+
+    // Khởi động scheduler kiểm tra kết nối Google Sheet mỗi ngày 8h sáng
+    startSheetHealthCheckScheduler(
+        client,
+        resolveSheetName,
+        checkSheetConnection,
+        ADMIN_DISCORD_ID
+    );
+
+    // Khởi động scheduler kiểm tra đầu tháng (ngày 1, 8h sáng): sheet có đúng
+    // ngày hôm nay chưa và lấy được dữ liệu dòng của admin không
+    startMonthlySheetCheckScheduler(
+        client,
+        resolveSheetName,
+        checkMonthlySheetHealth,
+        ADMIN_DISCORD_ID
+    );
 });
 
 // Khởi tạo Google Auth Client
@@ -114,6 +167,144 @@ async function initializeAuth() {
 
 // Kết nối với Google Sheets API
 const sheets = google.sheets({ version: "v4" });
+
+// Lấy danh sách các tab (sheets.properties) của spreadsheet hiện tại
+async function getSpreadsheetSheetsMetadata() {
+    if (!authClient) {
+        throw new Error("Google Auth chưa được khởi tạo");
+    }
+
+    const response = await sheets.spreadsheets.get({
+        spreadsheetId: process.env.SHEET_ID,
+        fields: "sheets.properties",
+        auth: authClient,
+    });
+
+    return response.data.sheets || [];
+}
+
+function findSheetByGid(sheetsList, gid) {
+    return sheetsList.find((s) => String(s.properties.sheetId) === gid);
+}
+
+// Xác định tên tab (sheet) sẽ dùng: luôn tra theo G_SHEET_ID (gid trên URL,
+// vd: .../edit?gid=750327783), không dùng tên sheet nữa.
+async function resolveSheetName() {
+    const gid = process.env.G_SHEET_ID?.trim();
+    if (!gid) {
+        return { error: "Chưa cấu hình G_SHEET_ID" };
+    }
+
+    try {
+        const sheetsList = await getSpreadsheetSheetsMetadata();
+        const sheet = findSheetByGid(sheetsList, gid);
+
+        if (!sheet) {
+            return {
+                error: `Không tìm thấy tab nào có gid=${gid} trong spreadsheet`,
+            };
+        }
+
+        return { sheetName: sheet.properties.title, source: "G_SHEET_ID" };
+    } catch (err) {
+        return { error: `Lỗi khi tra cứu gid: ${err.message}` };
+    }
+}
+
+// Kiểm tra kết nối Google Sheet bằng cách tìm dòng của "Mai Xuân Hiếu" và
+// đọc thử vài giá trị trong dòng đó (đúng như case kiểm tra hàng ngày 8h sáng)
+async function checkSheetConnection(sheetName) {
+    if (!authClient) {
+        return { error: "Google Auth chưa được khởi tạo" };
+    }
+
+    const nameResult = await findNameInColumn(sheetName, "Mai Xuân Hiếu");
+    if (nameResult.error) {
+        return { error: nameResult.error };
+    }
+    if (!nameResult.row) {
+        return { error: 'Không tìm thấy "Mai Xuân Hiếu" trong sheet' };
+    }
+
+    const rowResult = await getLast5ValuesInRow(sheetName, nameResult.row);
+    if (rowResult.error) {
+        return { error: rowResult.error };
+    }
+
+    return {
+        success: true,
+        row: nameResult.row,
+        valuesWithDates: rowResult.valuesWithDates || [],
+    };
+}
+
+// Kiểm tra dòng 4 của sheet có chứa đúng ngày hôm nay không. Dòng 4 là lịch theo
+// tuần nên không thể chỉ so tháng của ngày đầu tiên (tuần có thể bắt đầu từ
+// tháng trước) - phải kiểm tra chính xác ngày hôm nay có nằm trong đó không,
+// vì đây chính là điều kiện /abcom và job gửi món ăn dùng để tra cột.
+async function checkSheetHasTodayDate(sheetName) {
+    const datesResult = await getRow4Dates(sheetName);
+    if (datesResult.error) {
+        return { error: datesResult.error };
+    }
+
+    const dates = (datesResult.dates || []).filter(
+        (d) => d && d.toString().trim()
+    );
+    if (dates.length === 0) {
+        return { error: "Không tìm thấy ngày nào trong dòng 4 của sheet" };
+    }
+
+    const today = getTodayDate();
+    const hasToday = dates.some((d) => normalizeDateText(d) === today);
+
+    if (!hasToday) {
+        return {
+            error:
+                `Không tìm thấy ngày hôm nay (${today}) trong dòng 4 của sheet. ` +
+                `Có thể sheet chưa được cập nhật cho tháng/tuần mới, kiểm tra lại G_SHEET_ID.`,
+        };
+    }
+
+    return { success: true, today };
+}
+
+// Kiểm tra đầu tháng: sheet có đúng ngày hôm nay + lấy được dữ liệu dòng của admin
+async function checkMonthlySheetHealth(sheetName) {
+    const dateResult = await checkSheetHasTodayDate(sheetName);
+    if (dateResult.error) {
+        return { error: dateResult.error };
+    }
+
+    const rowResult = await checkSheetConnection(sheetName);
+    if (rowResult.error) {
+        return { error: rowResult.error };
+    }
+
+    return { success: true, today: dateResult.today, row: rowResult.row };
+}
+
+// Chạy thử cả 2 loại kiểm tra (kết nối/dòng admin + đúng tháng) và trả về báo cáo dạng text
+async function buildManualCheckReport() {
+    const resolvedSheet = await resolveSheetName();
+    if (resolvedSheet.error) {
+        return `❌ Không xác định được sheet:\n${resolvedSheet.error}`;
+    }
+
+    const dailyCheck = await checkSheetConnection(resolvedSheet.sheetName);
+    const dateCheck = await checkSheetHasTodayDate(resolvedSheet.sheetName);
+
+    return (
+        `🧪 **Kết quả test kiểm tra sheet**\n` +
+        `Sheet đang dùng: "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source})\n\n` +
+        (dailyCheck.error
+            ? `❌ Kiểm tra kết nối / dòng admin: ${dailyCheck.error}\n`
+            : `✅ Kiểm tra kết nối / dòng admin: OK (dòng ${dailyCheck.row})\n`) +
+        (dateCheck.error
+            ? `❌ Kiểm tra ngày hôm nay trong sheet: ${dateCheck.error}`
+            : `✅ Kiểm tra ngày hôm nay trong sheet: OK (${dateCheck.today})`)
+    );
+}
 
 // Hàm chuẩn hóa tên (bỏ dấu, lowercase, trim)
 function normalizeName(name) {
@@ -554,8 +745,6 @@ async function processSearchResult(
 
 client.on("interactionCreate", async (interaction) => {
     if (interaction.isChatInputCommand()) {
-        const DEFAULT_SHEET_NAME = process.env.DEFAULT_SHEET_NAME;
-
         if (interaction.commandName === "abcom") {
             await interaction.deferReply();
 
@@ -566,6 +755,13 @@ client.on("interactionCreate", async (interaction) => {
                 await interaction.editReply("❌ Vui lòng nhập tên");
                 return;
             }
+
+            const resolvedSheet = await resolveSheetName();
+            if (resolvedSheet.error) {
+                await interaction.editReply(`❌ ${resolvedSheet.error}`);
+                return;
+            }
+            const DEFAULT_SHEET_NAME = resolvedSheet.sheetName;
 
             const nameResult = await findNameInColumn(DEFAULT_SHEET_NAME, name);
             if (nameResult.error) {
@@ -681,6 +877,94 @@ client.on("interactionCreate", async (interaction) => {
             interaction.commandName === "fbname"
         ) {
             await handleFootballCommands(interaction);
+        } else if (interaction.commandName === "configsheet") {
+            if (interaction.user.id !== ADMIN_DISCORD_ID) {
+                await interaction.reply({
+                    content: "❌ Bạn không có quyền sử dụng lệnh này.",
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const sheetIdInput = interaction.options.getString("sheet_id");
+            const gidInput = interaction.options.getString("gid");
+
+            if (!sheetIdInput && !gidInput) {
+                await interaction.editReply(
+                    "❌ Vui lòng nhập ít nhất một trong: sheet_id, gid"
+                );
+                return;
+            }
+
+            const updates = {};
+            if (sheetIdInput) updates.SHEET_ID = sheetIdInput.trim();
+            if (gidInput) updates.G_SHEET_ID = gidInput.trim();
+
+            try {
+                updateEnvFile(updates);
+            } catch (error) {
+                await interaction.editReply(
+                    `❌ Lỗi khi lưu cấu hình: ${error.message}`
+                );
+                return;
+            }
+
+            const resolvedSheet = await resolveSheetName();
+            if (resolvedSheet.error) {
+                await interaction.editReply(
+                    `⚠️ Đã lưu cấu hình nhưng không xác định được sheet:\n${resolvedSheet.error}\n\n` +
+                        `Vui lòng kiểm tra lại SHEET_ID / G_SHEET_ID (gid).`
+                );
+                return;
+            }
+
+            const checkResult = await checkSheetConnection(
+                resolvedSheet.sheetName
+            );
+            if (checkResult.error) {
+                await interaction.editReply(
+                    `⚠️ Đã lưu cấu hình nhưng kiểm tra không thành công.\n` +
+                        `Sheet đang dùng: "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source
+                        })\n` +
+                        `Lỗi: ${checkResult.error}\n\n` +
+                        `Vui lòng kiểm tra lại cấu hình sheet.`
+                );
+                return;
+            }
+
+            await interaction.editReply(
+                `✅ Đã lưu cấu hình thành công!\n` +
+                    `**SHEET_ID:** ${process.env.SHEET_ID}\n` +
+                    `**Sheet đang dùng:** "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source})\n` +
+                    `**Kiểm tra:** Tìm thấy "Mai Xuân Hiếu" tại dòng ${checkResult.row} ✅`
+            );
+        } else if (interaction.commandName === "testsheetcheck") {
+            if (interaction.user.id !== ADMIN_DISCORD_ID) {
+                await interaction.reply({
+                    content: "❌ Bạn không có quyền sử dụng lệnh này.",
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const report = await buildManualCheckReport();
+
+            try {
+                const admin = await interaction.client.users.fetch(
+                    ADMIN_DISCORD_ID
+                );
+                await admin.send(report);
+            } catch (error) {
+                console.error("❌ Không thể gửi DM test cho admin:", error);
+            }
+
+            await interaction.editReply(
+                `Đã chạy test và gửi kết quả qua DM.\n\n${report}`
+            );
         }
     }
 });

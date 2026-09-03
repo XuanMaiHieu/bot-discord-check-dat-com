@@ -120,7 +120,7 @@ function loadUsersFromFile() {
 // Hàm khởi tạo scheduler
 function startDailyFoodScheduler(
     client,
-    sheetName,
+    resolveSheetName,
     findNameInColumn,
     findDateInRow,
     getCellValue
@@ -138,6 +138,16 @@ function startDailyFoodScheduler(
             );
             return;
         }
+
+        // Xác định sheet đang dùng (DEFAULT_SHEET_NAME hoặc fallback qua G_SHEET_ID)
+        const resolvedSheet = await resolveSheetName();
+        if (resolvedSheet.error) {
+            console.error(
+                `❌ Không xác định được sheet để gửi thông báo món ăn: ${resolvedSheet.error}`
+            );
+            return;
+        }
+        const sheetName = resolvedSheet.sheetName;
 
         // Đọc danh sách users từ file
         const enabledUsers = loadUsersFromFile();
