@@ -992,7 +992,7 @@ client.on("interactionCreate", async (interaction) => {
             if (resolvedSheet.error) {
                 await interaction.editReply(
                     `⚠️ Đã lưu cấu hình nhưng không xác định được sheet:\n${resolvedSheet.error}\n\n` +
-                        `Vui lòng kiểm tra lại SHEET_ID / G_SHEET_ID (gid).`
+                    `Vui lòng kiểm tra lại SHEET_ID / G_SHEET_ID (gid).`
                 );
                 return;
             }
@@ -1003,19 +1003,19 @@ client.on("interactionCreate", async (interaction) => {
             if (checkResult.error) {
                 await interaction.editReply(
                     `⚠️ Đã lưu cấu hình nhưng kiểm tra không thành công.\n` +
-                        `Sheet đang dùng: "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source
-                        })\n` +
-                        `Lỗi: ${checkResult.error}\n\n` +
-                        `Vui lòng kiểm tra lại cấu hình sheet.`
+                    `Sheet đang dùng: "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source
+                    })\n` +
+                    `Lỗi: ${checkResult.error}\n\n` +
+                    `Vui lòng kiểm tra lại cấu hình sheet.`
                 );
                 return;
             }
 
             await interaction.editReply(
                 `✅ Đã lưu cấu hình thành công!\n` +
-                    `**SHEET_ID:** ${process.env.SHEET_ID}\n` +
-                    `**Sheet đang dùng:** "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source})\n` +
-                    `**Kiểm tra:** Tìm thấy "Mai Xuân Hiếu" tại dòng ${checkResult.row} ✅`
+                `**SHEET_ID:** ${process.env.SHEET_ID}\n` +
+                `**Sheet đang dùng:** "${resolvedSheet.sheetName}" (từ ${resolvedSheet.source})\n` +
+                `**Kiểm tra:** Tìm thấy "Mai Xuân Hiếu" tại dòng ${checkResult.row} ✅`
             );
         } else if (interaction.commandName === "testsheetcheck") {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
