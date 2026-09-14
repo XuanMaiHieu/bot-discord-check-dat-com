@@ -7,7 +7,7 @@ module.exports = {
             script: "./bot.js",
 
             // thư mục project
-            cwd: "/home/abc-dev-data/workspace/code/bot-check-dat-com",
+            cwd: __dirname,
 
             // chạy 1 instance (bot discord không scale cluster)
             exec_mode: "fork",
