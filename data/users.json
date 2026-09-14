@@ -2,8 +2,8 @@
     "users": [
         {
             "name": "Nguyễn Thị Hậu",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "860896852589412382",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -20,8 +20,8 @@
         },
         {
             "name": "Phạm Ngọc Trâm",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1121757230912524319",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -32,20 +32,14 @@
         },
         {
             "name": "Nguyễn Thị Vân",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1130081560712982571",
+            "enabled": true,
             "football_notify": false
         },
         {
             "name": "Trần Thị Quỳnh Trang",
-            "discordId": null,
-            "enabled": false,
-            "football_notify": false
-        },
-        {
-            "name": "Ngô Phương Thảo",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1262586171394101371",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -62,8 +56,8 @@
         },
         {
             "name": "Nguyễn Xuân Hiệp",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "869048935417798668",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -74,8 +68,8 @@
         },
         {
             "name": "Ngô Mạnh Trường",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1307884308975058985",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -85,12 +79,6 @@
             "football_notify": false
         },
         {
-            "name": "Nguyễn Anh Đức",
-            "discordId": "683847546908704778",
-            "enabled": true,
-            "football_notify": true
-        },
-        {
             "name": "Nguyễn Huyền Trang",
             "discordId": null,
             "enabled": false,
@@ -98,20 +86,14 @@
         },
         {
             "name": "Nguyễn Thị Thanh Xuân",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "852090691056304130",
+            "enabled": true,
             "football_notify": false
         },
         {
             "name": "Lê Đăng Doanh",
-            "discordId": null,
-            "enabled": false,
-            "football_notify": false
-        },
-        {
-            "name": "Trần Thành Nguyên",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1016906855575978135",
+            "enabled": true,
             "football_notify": false
         },
         {
@@ -130,6 +112,24 @@
             "name": "Đỗ Huy Linh",
             "discordId": null,
             "enabled": false,
+            "football_notify": false
+        },
+        {
+            "name": "Đỗ Thị Hồng",
+            "discordId": "888033511532027944",
+            "enabled": true,
+            "football_notify": false
+        },
+        {
+            "name": "Nguyễn Như Quỳnh",
+            "discordId": "1171644139947962468",
+            "enabled": true,
+            "football_notify": false
+        },
+        {
+            "name": "Lương Đình Dũng",
+            "discordId": "897776470259281950",
+            "enabled": true,
             "football_notify": false
         }
     ]
