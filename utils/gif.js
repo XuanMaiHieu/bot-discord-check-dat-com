@@ -80,12 +80,20 @@ function getTopN() {
     return Number.isInteger(n) && n > 0 ? n : 10;
 }
 
-// Bỏ các kết quả có tiêu đề khớp excludeTitle (regex). Nếu lọc xong không còn gì
-// thì giữ nguyên danh sách gốc - có GIF hơi lệch vẫn hơn không có GIF
-function filterByTitle(items, getTitle, excludeTitle) {
-    if (!excludeTitle) return items;
-    const kept = items.filter((item) => !excludeTitle.test(getTitle(item) || ""));
-    return kept.length > 0 ? kept : items;
+// Lọc kết quả theo tiêu đề:
+//   includeTitle - chỉ giữ GIF có tiêu đề khớp (danh sách trắng)
+//   excludeTitle - bỏ GIF có tiêu đề khớp (danh sách đen)
+//   strict       - lọc xong không còn gì thì trả về rỗng. Mặc định (false) giữ
+//                  nguyên danh sách gốc vì có GIF hơi lệch vẫn hơn không có GIF
+function filterByTitle(items, getTitle, { includeTitle = null, excludeTitle = null, strict = false } = {}) {
+    if (!includeTitle && !excludeTitle) return items;
+    const kept = items.filter((item) => {
+        const title = getTitle(item) || "";
+        if (includeTitle && !includeTitle.test(title)) return false;
+        if (excludeTitle && excludeTitle.test(title)) return false;
+        return true;
+    });
+    return kept.length > 0 || strict ? kept : items;
 }
 
 // Nhận diện từ khóa tiếng Việt có dấu để search đúng ngôn ngữ.
@@ -127,7 +135,9 @@ async function fetchJson(url, timeoutMs = 8000) {
     try {
         const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const error = new Error(`HTTP ${response.status}`);
+            error.status = response.status;
+            throw error;
         }
         return await response.json();
     } finally {
@@ -136,7 +146,7 @@ async function fetchJson(url, timeoutMs = 8000) {
 }
 
 // Provider 1: Tenor v2 (cần key miễn phí từ Google Cloud console)
-async function fetchFromTenor(query, { excludeTitle = null } = {}) {
+async function fetchFromTenor(query, options = {}) {
     const apiKey = process.env.TENOR_API_KEY;
     if (!apiKey) return null;
 
@@ -144,7 +154,7 @@ async function fetchFromTenor(query, { excludeTitle = null } = {}) {
         q: query,
         key: apiKey,
         client_key: process.env.TENOR_CLIENT_KEY || "bot_check_dat_com",
-        limit: String(getTopN()),
+        limit: String(options.limit || getTopN()),
         media_filter: "gif,tinygif",
         contentfilter: process.env.TENOR_CONTENT_FILTER || "high",
         locale: hasVietnameseChars(query) ? "vi_VN" : "en_US",
@@ -154,7 +164,7 @@ async function fetchFromTenor(query, { excludeTitle = null } = {}) {
     const results = filterByTitle(
         Array.isArray(data?.results) ? data.results : [],
         (item) => item?.content_description,
-        excludeTitle
+        options
     );
     if (results.length === 0) return null;
 
@@ -174,23 +184,68 @@ async function fetchFromTenor(query, { excludeTitle = null } = {}) {
 }
 
 // Provider 2: Giphy (cần key miễn phí từ developers.giphy.com)
-async function fetchFromGiphy(query, { excludeTitle = null } = {}) {
-    const apiKey = process.env.GIPHY_API_KEY;
-    if (!apiKey) return null;
+// Giphy beta key chỉ 100 request/giờ, nên cho phép khai báo nhiều key cách nhau
+// bởi dấu phẩy: GIPHY_API_KEY=key1,key2. Key nào bị 429 (hết hạn mức) hoặc
+// 401/403 (key hỏng) thì tạm bỏ qua 1 giờ và chuyển sang key kế tiếp.
+const GIPHY_KEY_COOLDOWN_MS = 60 * 60 * 1000;
+const giphyKeyBlockedUntil = new Map();
+
+function getGiphyKeys() {
+    return String(process.env.GIPHY_API_KEY || "")
+        .split(",")
+        .map((key) => key.trim())
+        .filter(Boolean);
+}
+
+// Giấu gần hết key khi ghi log
+function maskKey(key) {
+    return `${key.slice(0, 4)}…${key.slice(-2)}`;
+}
+
+async function fetchFromGiphy(query, options = {}) {
+    const keys = getGiphyKeys();
+    if (keys.length === 0) return null;
+
+    const now = Date.now();
+    const availableKeys = keys.filter(
+        (key) => (giphyKeyBlockedUntil.get(key) || 0) <= now
+    );
+    if (availableKeys.length === 0) {
+        throw new Error("Tất cả Giphy key đều đang hết hạn mức, thử lại sau");
+    }
 
     const params = new URLSearchParams({
-        api_key: apiKey,
         q: query,
-        limit: String(getTopN()),
+        limit: String(options.limit || getTopN()),
         rating: process.env.GIPHY_RATING || "g",
         lang: process.env.GIPHY_LANG || (hasVietnameseChars(query) ? "vi" : "en"),
     });
 
-    const data = await fetchJson(`https://api.giphy.com/v1/gifs/search?${params}`);
+    let data = null;
+    for (const key of availableKeys) {
+        params.set("api_key", key);
+        try {
+            data = await fetchJson(`https://api.giphy.com/v1/gifs/search?${params}`);
+            break;
+        } catch (error) {
+            if ([401, 403, 429].includes(error.status)) {
+                giphyKeyBlockedUntil.set(key, Date.now() + GIPHY_KEY_COOLDOWN_MS);
+                console.log(
+                    `⚠️ Giphy key ${maskKey(key)} lỗi HTTP ${error.status}, tạm bỏ qua 1 giờ và thử key khác`
+                );
+                continue;
+            }
+            throw error;
+        }
+    }
+    if (!data) {
+        throw new Error("Tất cả Giphy key đều đang hết hạn mức, thử lại sau");
+    }
+
     const results = filterByTitle(
         Array.isArray(data?.data) ? data.data : [],
         (item) => item?.title,
-        excludeTitle
+        options
     );
     if (results.length === 0) return null;
 
@@ -241,8 +296,13 @@ async function resolveOtakuReaction(query) {
 }
 
 // Provider 3: OtakuGIFs - miễn phí, không cần key
-async function fetchFromOtakuGifs(query) {
+async function fetchFromOtakuGifs(query, options = {}) {
     const reaction = await resolveOtakuReaction(query);
+    // Tiêu đề của OtakuGIFs chính là tên reaction; ở chế độ strict mà reaction
+    // không qua được bộ lọc thì bỏ, không trả về GIF ngẫu nhiên lạc đề
+    if (options.strict && filterByTitle([reaction], (r) => r, options).length === 0) {
+        return null;
+    }
     const data = await fetchJson(
         `https://api.otakugifs.xyz/gif?reaction=${encodeURIComponent(reaction)}&format=gif`
     );
@@ -271,7 +331,10 @@ const PROVIDERS = [
  *
  * @param {string} query - Từ khóa (tiếng Việt có dấu sẽ tự search bằng lang=vi)
  * @param {object} options
- * @param {RegExp} options.excludeTitle - Bỏ GIF có tiêu đề khớp regex này (Tenor / Giphy)
+ * @param {RegExp} options.includeTitle - Chỉ lấy GIF có tiêu đề khớp regex này
+ * @param {RegExp} options.excludeTitle - Bỏ GIF có tiêu đề khớp regex này
+ * @param {boolean} options.strict - Lọc xong không còn GIF thì trả null thay vì lấy bừa
+ * @param {number} options.limit - Số kết quả lấy về để lọc (mặc định GIF_TOP_N)
  *
  * Trả về { url, provider, title, pageUrl, note } hoặc null nếu không nguồn nào chạy được.
  */
@@ -297,7 +360,9 @@ async function fetchGif(query = "", options = {}) {
 // Cho biết provider nào đang được cấu hình (dùng để hiển thị trong /help, /test-send-gif)
 function getActiveProviderName() {
     if (process.env.TENOR_API_KEY) return "Tenor";
-    if (process.env.GIPHY_API_KEY) return "Giphy";
+    const giphyKeys = getGiphyKeys();
+    if (giphyKeys.length > 1) return `Giphy (${giphyKeys.length} key)`;
+    if (giphyKeys.length === 1) return "Giphy";
     return "OtakuGIFs (miễn phí, không cần key)";
 }
 

@@ -97,8 +97,10 @@ async function sendGifToUser(
         };
     }
 
+    // Khai báo ngoài try để khi gửi lỗi vẫn trả về được thông tin user (tên hiển thị)
+    let user = null;
     try {
-        const user = await client.users.fetch(discordId);
+        user = await client.users.fetch(discordId);
         const embed = buildGifEmbed(gif, { message, footer });
 
         await user.send({ embeds: [embed] });
@@ -109,11 +111,12 @@ async function sendGifToUser(
             return {
                 success: false,
                 gif,
+                user,
                 error:
                     "Người này đang tắt DM từ thành viên trong server, hoặc chưa chung server với bot.",
             };
         }
-        return { success: false, gif, error: error.message };
+        return { success: false, gif, user, error: error.message };
     }
 }
 
