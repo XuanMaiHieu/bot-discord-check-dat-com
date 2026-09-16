@@ -42,8 +42,44 @@ const STANDUP_GIF_URLS = [
     "https://media.tenor.com/DGGFZlQLsuEAAAAC/xuan-nghi-doi-qua.gif", // Xuân Nghị: đói quá
 ];
 
-// Nhớ GIF lần trước để hôm sau không bốc trùng
-let lastStandupGifUrl = null;
+// Một GIF đã gửi thì phải cách ít nhất N ngày mới được gửi lại
+function getNoRepeatDays() {
+    const n = parseInt(process.env.STANDUP_GIF_NO_REPEAT_DAYS, 10);
+    return Number.isInteger(n) && n >= 0 ? n : 5;
+}
+
+// Lịch sử GIF đã gửi, lưu ra file để không mất khi restart / deploy.
+// data/ nằm trong .gitignore nên git pull không ghi đè file này.
+const GIF_HISTORY_FILE = path.join(__dirname, "../data/standup-gif-history.json");
+const GIF_HISTORY_MAX_ENTRIES = 100;
+
+function loadGifHistory() {
+    try {
+        const data = JSON.parse(fs.readFileSync(GIF_HISTORY_FILE, "utf8"));
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        return []; // chưa có file (lần chạy đầu) hoặc file hỏng -> coi như chưa gửi gì
+    }
+}
+
+function recordGifSent(url, date = new Date()) {
+    try {
+        const history = [...loadGifHistory(), { url, sentAt: date.toISOString() }]
+            .slice(-GIF_HISTORY_MAX_ENTRIES);
+        // Ghi ra file tạm rồi đổi tên, tránh hỏng file nếu bot tắt giữa chừng
+        const tmpFile = `${GIF_HISTORY_FILE}.tmp`;
+        fs.writeFileSync(tmpFile, JSON.stringify(history, null, 2), "utf8");
+        fs.renameSync(tmpFile, GIF_HISTORY_FILE);
+    } catch (error) {
+        console.error(`❌ Không lưu được lịch sử GIF đứng dậy: ${error.message}`);
+    }
+}
+
+// Số ngày lịch (theo giờ máy, TZ=Asia/Ho_Chi_Minh) giữa 2 thời điểm, bỏ qua giờ phút
+function daysBetween(from, to) {
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((startOfDay(to) - startOfDay(from)) / (24 * 60 * 60 * 1000));
+}
 
 // ---------------------------------------------------------------------------
 // Chế độ API (đang TẮT). Bật lại bằng STANDUP_GIF_MODE=api trong .env.
@@ -119,15 +155,34 @@ function shuffle(list) {
     return copy;
 }
 
-// Bốc ngẫu nhiên 1 GIF trong bộ chọn sẵn (không trùng với lần trước)
-function pickCuratedStandupGif() {
-    const candidates =
-        STANDUP_GIF_URLS.length > 1
-            ? STANDUP_GIF_URLS.filter((url) => url !== lastStandupGifUrl)
-            : STANDUP_GIF_URLS;
-    const url = candidates[Math.floor(Math.random() * candidates.length)];
-    lastStandupGifUrl = url;
+// Bốc ngẫu nhiên 1 GIF trong bộ chọn sẵn, bỏ qua GIF đã gửi trong N ngày gần đây
+function pickCuratedStandupGif(now = new Date()) {
+    const noRepeatDays = getNoRepeatDays();
 
+    // Lần gửi gần nhất của từng GIF
+    const lastSentAt = new Map();
+    for (const entry of loadGifHistory()) {
+        const sentAt = new Date(entry?.sentAt);
+        if (!entry?.url || Number.isNaN(sentAt.getTime())) continue;
+        const prev = lastSentAt.get(entry.url);
+        if (!prev || sentAt > prev) lastSentAt.set(entry.url, sentAt);
+    }
+
+    let candidates = STANDUP_GIF_URLS.filter((url) => {
+        const sentAt = lastSentAt.get(url);
+        return !sentAt || daysBetween(sentAt, now) >= noRepeatDays;
+    });
+
+    // Bộ GIF quá ít so với N ngày thì không còn GIF nào hợp lệ:
+    // lấy những GIF đã lâu nhất chưa gửi thay vì không gửi gì
+    if (candidates.length === 0) {
+        const oldest = Math.min(...STANDUP_GIF_URLS.map((url) => lastSentAt.get(url)?.getTime() ?? 0));
+        candidates = STANDUP_GIF_URLS.filter(
+            (url) => (lastSentAt.get(url)?.getTime() ?? 0) === oldest
+        );
+    }
+
+    const url = candidates[Math.floor(Math.random() * candidates.length)];
     const index = STANDUP_GIF_URLS.indexOf(url) + 1;
     return {
         gif: {
@@ -136,7 +191,8 @@ function pickCuratedStandupGif() {
             title: null,
             pageUrl: null,
         },
-        query: `bộ GIF chọn sẵn (#${index}/${STANDUP_GIF_URLS.length})`,
+        query: `bộ GIF chọn sẵn (#${index}/${STANDUP_GIF_URLS.length}, còn ${candidates.length} GIF chưa gửi trong ${noRepeatDays} ngày)`,
+        curated: true,
     };
 }
 
@@ -192,7 +248,7 @@ function findUserNameById(discordId) {
  */
 async function runStandupNotification(client, { targetUserIds = null } = {}) {
     // Chỉ lấy GIF 1 lần rồi gửi chung cho mọi người, tránh đốt quota API
-    const { gif, query } = await fetchStandupGif();
+    const { gif, query, curated } = await fetchStandupGif();
 
     if (!gif) {
         console.error("❌ Không lấy được GIF đứng dậy, sẽ gửi tin nhắn không kèm GIF");
@@ -247,6 +303,12 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
         }
     }
 
+    // Chỉ ghi lịch sử khi gửi thật cho mọi người (cron 12h hoặc /test-standup all:True).
+    // Test gửi riêng cho 1 người không tính, để khỏi "đốt" GIF của những ngày tới.
+    if (curated && gif && sent > 0 && !targetUserIds) {
+        recordGifSent(gif.url);
+    }
+
     console.log(
         `🧍 Thông báo đứng dậy: gửi thành công ${sent}/${recipients.length}` +
         (gif ? ` (GIF: ${query} - ${gif.provider})` : " (không có GIF)")
@@ -289,6 +351,8 @@ module.exports = {
     isWeekday,
     STANDUP_MESSAGE,
     STANDUP_GIF_URLS,
+    GIF_HISTORY_FILE,
+    pickCuratedStandupGif,
     STANDUP_GIF_SOURCES,
     STANDUP_GIF_EXCLUDE,
 };
