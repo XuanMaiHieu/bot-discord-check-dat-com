@@ -22,6 +22,15 @@ const {
     handleFootballCommands,
 } = require("./commands/football");
 const {
+    testSendGifCommand,
+    handleTestSendGifCommand,
+    testStandupCommand,
+    handleTestStandupCommand,
+} = require("./commands/gif");
+const {
+    startStandupScheduler,
+} = require("./scheduler/standup-notification");
+const {
     startDailyFoodScheduler,
 } = require("./scheduler/daily-food-notification");
 const { startFootballScheduler } = require("./scheduler/football-notification");
@@ -122,6 +131,8 @@ client.once("ready", async () => {
                         .setRequired(false)
                 )
                 .toJSON(),
+            testSendGifCommand, // Thêm command /test-send-gif (root only)
+            testStandupCommand, // Thêm command /test-standup (root only)
             new SlashCommandBuilder()
                 .setName("testsheetcheck")
                 .setDescription(
@@ -137,7 +148,7 @@ client.once("ready", async () => {
         });
 
         console.log(
-            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck"
+            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck, /test-send-gif, /test-standup"
         );
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
@@ -151,6 +162,9 @@ client.once("ready", async () => {
         findDateInRow,
         getCellValue
     );
+
+    // Khởi động scheduler nhắc đứng dậy lúc 12:00 (gửi sau thông báo món ăn 30s)
+    startStandupScheduler(client);
 
     // Khởi động scheduler gửi thông báo bóng đá
     startFootballScheduler(client);
@@ -954,6 +968,10 @@ client.on("interactionCreate", async (interaction) => {
             interaction.commandName === "fbname"
         ) {
             await handleFootballCommands(interaction);
+        } else if (interaction.commandName === "test-send-gif") {
+            await handleTestSendGifCommand(interaction, ADMIN_DISCORD_ID);
+        } else if (interaction.commandName === "test-standup") {
+            await handleTestStandupCommand(interaction, ADMIN_DISCORD_ID);
         } else if (interaction.commandName === "configsheet") {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
                 await interaction.reply({
