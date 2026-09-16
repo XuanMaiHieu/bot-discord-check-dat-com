@@ -8,16 +8,28 @@ const { sendGifToUser } = require("../commands/gif");
 const STANDUP_MESSAGE =
     "🕛 **Thời điểm đã đến, kính mời quý user hãy đứng dậy**";
 
-// Từ khóa GIF "hãy đứng dậy".
-// Giphy search bằng tiếng Anh (lang=en) nên để tiếng Anh cho ra đúng GIF;
-// mỗi ngày bốc ngẫu nhiên 1 từ khóa để GIF không lặp lại nhàm chán.
+// Từ khóa GIF cho thông báo 12h - mỗi ngày bốc ngẫu nhiên 1 từ, chia 2 nhóm ý nghĩa.
+// Đã test thực tế trên Giphy (top 10 kết quả).
 const STANDUP_GIF_QUERIES = [
-    "stand up",
-    "get up from chair",
-    "stretching at desk",
-    "office stretch break",
-    "time to move",
+    // Nhóm 1: đứng dậy, rời bàn làm việc
+    "rời bàn làm việc",   // 8/10 cảnh rời chỗ làm (Go Home, Leaving Work, Got To Go...)
+    "the office leaving", // 9/10 cảnh bỏ đi trong phim The Office
+    "leave work",         // cảnh chạy khỏi chỗ làm
+
+    // Nhóm 2: kêu gọi mọi người cùng đứng lên
+    "on your feet",       // 10/10 cảnh hô hào đứng dậy, khí thế "let's go"
+    "get on your feet",   // "Get Up", "Stand Up Get On Your Feet"
+    "lets go everyone",   // "Come Let's Go", "Join Us"
 ];
+// Đã loại sau khi test:
+//   "hãy đứng dậy" / "đứng dậy" / "get up stand up" -> ra cảnh ngủ dậy, good morning
+//   "stand up" / "đứng lên" / "mọi người đứng lên" / "everybody stand up" -> dính stand-up comedy
+//   "vươn vai" -> ra "reach out";  "all rise" -> bóng chày, tòa án
+
+// Loại GIF có tiêu đề lệch ngữ cảnh 12h trưa ngày thường:
+// ngủ dậy buổi sáng, hết tuần / nghỉ lễ, đang cắm mặt làm việc, hài độc thoại, quảng cáo tuyển dụng
+const STANDUP_GIF_EXCLUDE =
+    /good ?morning|wake ?up|sleep|good ?night|friday|weekend|labor day|vacation|holiday|working|happy hour|comedy|hiring/i;
 
 // Hàm kiểm tra xem hôm nay có phải là thứ 2-6 không
 function isWeekday() {
@@ -64,7 +76,7 @@ function pickRandom(list) {
 async function runStandupNotification(client, { targetUserIds = null } = {}) {
     // Chỉ lấy GIF 1 lần rồi gửi chung cho mọi người, tránh đốt quota API
     const query = process.env.STANDUP_GIF_QUERY || pickRandom(STANDUP_GIF_QUERIES);
-    const gif = await fetchGif(query);
+    const gif = await fetchGif(query, { excludeTitle: STANDUP_GIF_EXCLUDE });
 
     if (!gif) {
         console.error("❌ Không lấy được GIF đứng dậy, sẽ gửi tin nhắn không kèm GIF");

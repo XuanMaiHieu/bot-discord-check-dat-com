@@ -39,7 +39,10 @@ const KEYWORD_TO_REACTION = {
     "khoc": "cry", "cry": "cry",
     "gian": "mad", "tuc": "mad", "angry": "mad", "mad": "mad",
     "nhay": "dance", "dance": "dance", "quay": "dance",
-    "an": "nom", "com": "nom", "an com": "nom", "food": "nom", "eat": "nom",
+    "com": "nom", "an com": "nom", "food": "nom", "eat": "nom", "doi": "nom",
+    // "no" tiếng Việt = no bụng, phải khớp cả cụm trước khi bị hiểu là "no" (từ chối)
+    "no bung": "happy", "no qua": "happy", "an no": "happy",
+    "khong": "no", "thoi": "no", "dung lai": "stop",
     "ngu": "sleep", "sleep": "sleep", "buon ngu": "yawn",
     "met": "tired", "tired": "tired",
     "vo tay": "clap", "clap": "clap",
@@ -68,6 +71,30 @@ function normalizeText(text) {
 
 function pickRandom(list) {
     return list[Math.floor(Math.random() * list.length)];
+}
+
+// Chỉ bốc ngẫu nhiên trong N kết quả đầu: càng xuống sâu kết quả càng lạc đề
+// (test "stand up" thì từ vị trí ~10 trở đi toàn Bundesliga, Imagine Dragons...)
+function getTopN() {
+    const n = parseInt(process.env.GIF_TOP_N, 10);
+    return Number.isInteger(n) && n > 0 ? n : 10;
+}
+
+// Bỏ các kết quả có tiêu đề khớp excludeTitle (regex). Nếu lọc xong không còn gì
+// thì giữ nguyên danh sách gốc - có GIF hơi lệch vẫn hơn không có GIF
+function filterByTitle(items, getTitle, excludeTitle) {
+    if (!excludeTitle) return items;
+    const kept = items.filter((item) => !excludeTitle.test(getTitle(item) || ""));
+    return kept.length > 0 ? kept : items;
+}
+
+// Nhận diện từ khóa tiếng Việt có dấu để search đúng ngôn ngữ.
+// Giphy hiểu tiếng Việt khá tốt khi truyền lang=vi ("mèo" + vi -> toàn mèo,
+// "mèo" + en -> lẫn GIF nhảy múa, hát hò). Gõ không dấu thì không đoán được -> en.
+function hasVietnameseChars(text) {
+    return /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(
+        String(text || "")
+    );
 }
 
 // Lấy danh sách reaction hợp lệ của OtakuGIFs (có cache)
@@ -109,7 +136,7 @@ async function fetchJson(url, timeoutMs = 8000) {
 }
 
 // Provider 1: Tenor v2 (cần key miễn phí từ Google Cloud console)
-async function fetchFromTenor(query, { random = true } = {}) {
+async function fetchFromTenor(query, { excludeTitle = null } = {}) {
     const apiKey = process.env.TENOR_API_KEY;
     if (!apiKey) return null;
 
@@ -117,14 +144,18 @@ async function fetchFromTenor(query, { random = true } = {}) {
         q: query,
         key: apiKey,
         client_key: process.env.TENOR_CLIENT_KEY || "bot_check_dat_com",
-        limit: "20",
+        limit: String(getTopN()),
         media_filter: "gif,tinygif",
         contentfilter: process.env.TENOR_CONTENT_FILTER || "high",
-        random: random ? "true" : "false",
+        locale: hasVietnameseChars(query) ? "vi_VN" : "en_US",
     });
 
     const data = await fetchJson(`https://tenor.googleapis.com/v2/search?${params}`);
-    const results = Array.isArray(data?.results) ? data.results : [];
+    const results = filterByTitle(
+        Array.isArray(data?.results) ? data.results : [],
+        (item) => item?.content_description,
+        excludeTitle
+    );
     if (results.length === 0) return null;
 
     const item = pickRandom(results);
@@ -143,20 +174,24 @@ async function fetchFromTenor(query, { random = true } = {}) {
 }
 
 // Provider 2: Giphy (cần key miễn phí từ developers.giphy.com)
-async function fetchFromGiphy(query) {
+async function fetchFromGiphy(query, { excludeTitle = null } = {}) {
     const apiKey = process.env.GIPHY_API_KEY;
     if (!apiKey) return null;
 
     const params = new URLSearchParams({
         api_key: apiKey,
         q: query,
-        limit: "25",
+        limit: String(getTopN()),
         rating: process.env.GIPHY_RATING || "g",
-        lang: "en",
+        lang: process.env.GIPHY_LANG || (hasVietnameseChars(query) ? "vi" : "en"),
     });
 
     const data = await fetchJson(`https://api.giphy.com/v1/gifs/search?${params}`);
-    const results = Array.isArray(data?.data) ? data.data : [];
+    const results = filterByTitle(
+        Array.isArray(data?.data) ? data.data : [],
+        (item) => item?.title,
+        excludeTitle
+    );
     if (results.length === 0) return null;
 
     const item = pickRandom(results);
@@ -193,11 +228,13 @@ async function resolveOtakuReaction(query) {
         if (mapped && reactions.includes(mapped)) return mapped;
     }
 
-    // 4. Khớp một phần (substring)
-    const partial = reactions.find(
-        (r) => normalized.includes(r) || r.includes(normalized)
-    );
-    if (partial) return partial;
+    // 4. Gõ dở tên reaction (vd "celeb" -> "celebrate"). Không so chuỗi con tự do
+    // vì reaction ngắn như "no", "pat", "sip", "run" dính vào từ bất kỳ
+    // (vd "at" -> "pat", "stare"...)
+    if (normalized.length >= 4) {
+        const prefix = reactions.find((r) => r.startsWith(normalized));
+        if (prefix) return prefix;
+    }
 
     // 5. Không khớp gì thì lấy ngẫu nhiên
     return pickRandom(reactions);
@@ -231,14 +268,19 @@ const PROVIDERS = [
 
 /**
  * Lấy 1 GIF theo từ khóa, tự động thử lần lượt các provider.
+ *
+ * @param {string} query - Từ khóa (tiếng Việt có dấu sẽ tự search bằng lang=vi)
+ * @param {object} options
+ * @param {RegExp} options.excludeTitle - Bỏ GIF có tiêu đề khớp regex này (Tenor / Giphy)
+ *
  * Trả về { url, provider, title, pageUrl, note } hoặc null nếu không nguồn nào chạy được.
  */
-async function fetchGif(query = "") {
+async function fetchGif(query = "", options = {}) {
     const errors = [];
 
     for (const provider of PROVIDERS) {
         try {
-            const result = await provider.fn(query);
+            const result = await provider.fn(query, options);
             if (result?.url) return result;
         } catch (error) {
             errors.push(`${provider.name}: ${error.message}`);
