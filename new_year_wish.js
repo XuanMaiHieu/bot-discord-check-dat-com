@@ -30,16 +30,16 @@ async function sendNewYearWishes() {
         try {
             const discordUser = await client.users.fetch(user.discordId);
             await discordUser.send(
-                `🌸 Chúc mừng năm mới, thay mặt e Hiếu, bot check đặt cơm xin chúc anh em và gia đình năm mới an khang thịnh vượng, sức khoẻ dồi dào, công việc thuận lợi và,\n` +
-                `✨ Vạn sự như ý, tỉ sự như mơ 🏮\n` +
-                `🌈 Triệu triệu bất ngờ, hàng giờ hạnh phúc 🧧\n\n` +
-                `Xin chúc mừng năm mới 🌸🌸🌸 ✨🌟🎊`
+                `🌸 Chúc mừng năm mới, thay mặt e Hiếu, bot check đặt cơm xin chúc anh chị em và gia đình năm mới an khang thịnh vượng, sức khoẻ dồi dào, công việc thuận lợi và,\n` +
+                    `✨ Vạn sự như ý, tỉ sự như mơ 🏮\n` +
+                    `🌈 Triệu triệu bất ngờ, hàng giờ hạnh phúc 🧧\n\n` +
+                    `Chúc mừng năm mới 🌸🌸🌸 ✨🌟🎊`,
             );
             console.log(`✅ Đã gửi tin nhắn tới ${user.name}`);
         } catch (error) {
             console.error(
                 `❌ Lỗi gửi tin nhắn cho ${user.name} (${user.discordId}):`,
-                error.message
+                error.message,
             );
         }
     }
@@ -57,7 +57,7 @@ cron.schedule(
     },
     {
         timezone: "Asia/Ho_Chi_Minh",
-    }
+    },
 );
 
 // cron.schedule(
