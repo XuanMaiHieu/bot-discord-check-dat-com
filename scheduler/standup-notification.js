@@ -2,11 +2,12 @@ const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
 const { fetchGif } = require("../utils/gif");
-const { sendGifToUser } = require("../commands/gif");
+const { buildStandupCard } = require("../utils/meal-card");
+const { sendCardToUser } = require("../utils/card-message");
+const { isWorkingDay } = require("../utils/workdays");
 
-// Nội dung thông báo đứng dậy
-const STANDUP_MESSAGE =
-    "🕛 **Thời điểm đã đến, kính mời quý user hãy đứng dậy**";
+// Nội dung thông báo đứng dậy (thẻ tự hiển thị cỡ chữ lớn, không cần markdown)
+const STANDUP_MESSAGE = "🕛 Thời điểm đã đến, kính mời quý user hãy đứng dậy";
 
 // Bộ GIF chọn sẵn cho thông báo 12h - mặc định bốc ngẫu nhiên trong bộ này,
 // KHÔNG gọi API. Thêm / bớt GIF: sửa danh sách link bên dưới.
@@ -116,13 +117,6 @@ const STANDUP_GIF_SOURCES = [
 // hài độc thoại, quảng cáo tuyển dụng, đuổi người khác đi ("leave me alone", "go away")
 const STANDUP_GIF_EXCLUDE =
     /good ?morning|wake ?up|sleep|good ?night|friday|weekend|labor day|vacation|holiday|working|happy hour|comedy|hiring|leave me alone|go away/i;
-
-// Hàm kiểm tra xem hôm nay có phải là thứ 2-6 không
-function isWeekday() {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7
-    return dayOfWeek >= 1 && dayOfWeek <= 5; // Thứ 2 đến Thứ 6
-}
 
 // Hàm đọc danh sách users nhận thông báo đứng dậy từ file JSON.
 // Mặc định mọi user đang enabled đều nhận; muốn tắt cho ai thì thêm
@@ -263,36 +257,27 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
     let sent = 0;
     let failed = 0;
 
+    const card = buildStandupCard({
+        message: STANDUP_MESSAGE,
+        gifUrl: gif?.url || null,
+    });
+
     for (const user of recipients) {
         try {
-            if (gif) {
-                const result = await sendGifToUser(client, user.discordId, {
-                    gif,
-                    message: STANDUP_MESSAGE,
-                    footer: `Nhắc đứng dậy 12:00 • Nguồn GIF: ${gif.provider}`,
-                });
+            const result = await sendCardToUser(client, user.discordId, card);
+            const displayName =
+                user.name ||
+                result.user?.globalName ||
+                result.user?.username ||
+                user.discordId;
+            const note = gif ? "" : " (không có GIF)";
 
-                const displayName =
-                    user.name ||
-                    result.user?.globalName ||
-                    result.user?.username ||
-                    user.discordId;
-
-                if (result.success) {
-                    sent++;
-                    details.push(`✅ ${displayName}`);
-                } else {
-                    failed++;
-                    details.push(`❌ ${displayName}: ${result.error}`);
-                }
-            } else {
-                // Không có GIF thì vẫn phải gửi được chữ
-                const discordUser = await client.users.fetch(user.discordId);
-                await discordUser.send(STANDUP_MESSAGE);
+            if (result.success) {
                 sent++;
-                details.push(
-                    `✅ ${user.name || discordUser.globalName || discordUser.username} (không có GIF)`
-                );
+                details.push(`✅ ${displayName}${note}`);
+            } else {
+                failed++;
+                details.push(`❌ ${displayName}: ${result.error}`);
             }
 
             // Delay nhỏ giữa các lần gửi để tránh rate limit của Discord
@@ -325,9 +310,9 @@ function startStandupScheduler(client) {
     const cronExpression = "00 12 * * *";
 
     cron.schedule(cronExpression, async () => {
-        if (!isWeekday()) {
+        if (!isWorkingDay(new Date())) {
             console.log(
-                "⏭️ Hôm nay không phải ngày làm việc (T2-T6), bỏ qua thông báo đứng dậy"
+                "⏭️ Hôm nay không phải ngày làm việc (T2-T6 hoặc ngày làm bù), bỏ qua thông báo đứng dậy"
             );
             return;
         }
@@ -341,14 +326,13 @@ function startStandupScheduler(client) {
         }, 30 * 1000);
     });
 
-    console.log("✅ Đã bật scheduler nhắc đứng dậy lúc 12:00 (T2-T6)");
+    console.log("✅ Đã bật scheduler nhắc đứng dậy lúc 12:00 (T2-T6 + ngày làm bù)");
 }
 
 module.exports = {
     startStandupScheduler,
     runStandupNotification,
     loadStandupUsers,
-    isWeekday,
     STANDUP_MESSAGE,
     STANDUP_GIF_URLS,
     GIF_HISTORY_FILE,

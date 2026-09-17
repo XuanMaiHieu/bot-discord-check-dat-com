@@ -1,272 +1,257 @@
 const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
+const {
+    addDays,
+    formatDayMonth,
+    isWeekend,
+    isWorkingDay,
+} = require("../utils/workdays");
+const {
+    findNameInRows,
+    findDateColumn,
+    getMealAt,
+    isEmptyMeal,
+} = require("../utils/meal-sheet");
+const { AttachmentBuilder } = require("discord.js");
+const { buildDailyMealCard } = require("../utils/meal-card");
+const { sendCardToUser } = require("../utils/card-message");
+const { renderPostersInChildProcess } = require("../utils/poster-renderer");
 
-// Hàm lấy ngày hôm nay theo format DD/MM
-function getTodayDate() {
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, "0");
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    return `${day}/${month}`;
-}
-
-// Hàm kiểm tra xem hôm nay có phải là thứ 2-6 không
-function isWeekday() {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7
-    return dayOfWeek >= 1 && dayOfWeek <= 5; // Thứ 2 đến Thứ 6
-}
-
-// Hàm lấy món ăn của Mai Xuân Hiếu cho ngày hôm nay
-async function getTodayFoodForUser(
-    sheetName,
-    userName,
-    findNameInColumn,
-    findDateInRow,
-    getCellValue
-) {
-    try {
-        // Lấy ngày hôm nay
-        const today = getTodayDate();
-
-        // Tìm tên trong cột C
-        const nameResult = await findNameInColumn(sheetName, userName);
-        if (nameResult.error || !nameResult.row) {
-            return { error: `Không tìm thấy tên "${userName}" trong sheet` };
-        }
-
-        const foundRow = nameResult.row;
-        const foundName = nameResult.name || userName;
-
-        // Tìm ngày trong dòng 4
-        const dateResult = await findDateInRow(sheetName, today);
-        if (dateResult.error) {
-            return { error: `Không tìm thấy ngày "${today}" trong sheet` };
-        }
-
-        // Lấy giá trị tại ô giao nhau
-        const cellResult = await getCellValue(
-            sheetName,
-            dateResult.column,
-            foundRow
-        );
-
-        if (cellResult.error) {
-            return { error: cellResult.error };
-        }
-
-        return {
-            success: true,
-            name: foundName,
-            date: today,
-            food: cellResult.value || "(trống)",
-            position: `${dateResult.column}${foundRow}`,
-        };
-    } catch (error) {
-        return { error: error.message || "Lỗi không xác định" };
-    }
-}
-
-// Hàm gửi tin nhắn cho user
-async function sendDailyFoodNotification(client, userId, foodData) {
-    try {
-        const user = await client.users.fetch(userId);
-
-        if (!user) {
-            return false;
-        }
-
-        const message =
-            // `🍽️ **Thông báo món ăn hôm nay**\n\n` +
-            `🍛 **Món ăn:** ${foodData.food}\n` +
-            `📅 **Ngày:** ${foodData.date}\n` +
-            `👤 **Tên:** ${foodData.name}\n`;
-
-        // `📍 **Vị trí:** ${foodData.position}\n\n` +
-        // `_Tự động gửi lúc 12:00 hàng ngày (Thứ 2 - Thứ 6)_`;
-
-        await user.send(message);
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
+const POSTER_FILE_NAME = "com-trua.png";
 
 // Hàm đọc danh sách users từ file JSON
 function loadUsersFromFile() {
     try {
         const usersFilePath = path.join(__dirname, "../data/users.json");
         const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-        // const usersData = [
-
-        //     {
-        //         "name": "Mai Xuân Hiếu",
-        //         "discordId": "747134485946171403",
-        //         "enabled": true
-        //     },
-        // ]
 
         // Lọc ra các user có enabled: true và có discordId
-        const enabledUsers = usersData.users.filter(
+        return usersData.users.filter(
             (user) => user.enabled === true && user.discordId !== null
         );
-
-        return enabledUsers;
     } catch (error) {
         return [];
     }
 }
 
-// Hàm khởi tạo scheduler
-function startDailyFoodScheduler(
+// Tìm user trong users.json theo Discord ID (kể cả user đang tắt, dùng khi test)
+function findUserById(discordId) {
+    try {
+        const usersFilePath = path.join(__dirname, "../data/users.json");
+        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
+        return usersData.users.find((u) => u.discordId === discordId) || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+// Báo lỗi dạng chữ cho user (giữ như trước khi đổi sang thẻ)
+async function sendErrorToUser(client, discordId, message) {
+    try {
+        const discordUser = await client.users.fetch(discordId);
+        await discordUser.send(
+            `⚠️ **Thông báo món ăn hôm nay**\n\n` +
+            `❌ Không thể lấy thông tin món ăn:\n${message}\n\n` +
+            `_Thời gian: ${new Date().toLocaleString("vi-VN")}_`
+        );
+    } catch (error) {
+        // Silent fail
+    }
+}
+
+async function notifyAdmin(client, adminDiscordId, message) {
+    if (!adminDiscordId) return;
+    try {
+        const admin = await client.users.fetch(adminDiscordId);
+        await admin.send(message);
+    } catch (error) {
+        console.error(`❌ Không gửi được cảnh báo cho admin: ${error.message}`);
+    }
+}
+
+/**
+ * Gửi thẻ báo cơm cho mọi người (hoặc danh sách chỉ định khi test).
+ *
+ * @param {object} client - Discord client
+ * @param {object} deps
+ * @param {Function} deps.resolveSheetName
+ * @param {Function} deps.readSheetGrid - Đọc cả tab 1 lần: (sheetName) => { rows } | { error }
+ * @param {string} deps.adminDiscordId
+ * @param {object} options
+ * @param {string[]|null} options.targetUserIds - Chỉ gửi cho các ID này (test)
+ * @param {Date} options.date - Ngày cần báo (mặc định hôm nay; test có thể giả lập)
+ * @param {string|null} options.deliverToId - Test: gửi thẻ về ID này thay vì chủ thẻ,
+ *                                            và không DM báo lỗi cho chủ thẻ
+ * @returns {object} { sent, skipped, failed, total, details, error }
+ */
+async function runDailyFoodNotification(
     client,
-    resolveSheetName,
-    findNameInColumn,
-    findDateInRow,
-    getCellValue
+    { resolveSheetName, readSheetGrid, adminDiscordId },
+    { targetUserIds = null, date = new Date(), deliverToId = null } = {}
 ) {
-    // Schedule chạy vào 11h55 mỗi ngày
-    // Cron format: "phút giờ * * *" (phút giờ ngày tháng thứ)
-    // 00 12 * * * = 12:00 mỗi ngày
+    const report = { sent: 0, skipped: 0, failed: 0, total: 0, details: [], error: null };
+    const isTest = Boolean(targetUserIds);
+
+    const resolvedSheet = await resolveSheetName();
+    if (resolvedSheet.error) {
+        report.error = `Không xác định được sheet: ${resolvedSheet.error}`;
+        console.error(`❌ ${report.error}`);
+        return report;
+    }
+    const sheetName = resolvedSheet.sheetName;
+
+    const grid = await readSheetGrid(sheetName);
+    if (grid.error) {
+        report.error = `Không đọc được sheet "${sheetName}": ${grid.error}`;
+        console.error(`❌ ${report.error}`);
+        return report;
+    }
+    const rows = grid.rows;
+
+    const todayColumn = findDateColumn(rows, date);
+
+    // Ngày làm bù (thứ 7 / CN) mà HR chưa thêm cột vào sheet: chỉ báo admin,
+    // không DM lỗi hàng loạt cho mọi người
+    if (todayColumn === -1 && isWeekend(date)) {
+        report.error =
+            `Hôm nay (${formatDayMonth(date)}) được bật làm bù nhưng sheet "${sheetName}" ` +
+            `chưa có cột ngày này, nên bỏ qua thông báo món ăn.`;
+        console.error(`❌ ${report.error}`);
+        if (!isTest) await notifyAdmin(client, adminDiscordId, `⚠️ ${report.error}`);
+        return report;
+    }
+
+    // Dòng "Ngày mai" chỉ hiện khi ngày mai là ngày làm việc (T2-T5, hoặc thứ 6
+    // khi thứ 7 được bật làm bù) VÀ sheet đã có cột ngày mai
+    const tomorrow = addDays(date, 1);
+    const tomorrowColumn = isWorkingDay(tomorrow) ? findDateColumn(rows, tomorrow) : -1;
+
+    const recipients = isTest
+        ? targetUserIds.map((id) => findUserById(id) || { discordId: id, name: null })
+        : loadUsersFromFile();
+    report.total = recipients.length;
+
+    // Bước 1: tra món của từng người, bỏ qua / báo lỗi những người không gửi được
+    const deliveries = [];
+    for (const user of recipients) {
+        const label = user.name || user.discordId;
+
+        if (!user.name) {
+            report.failed++;
+            report.details.push(`❌ ${label}: chưa có trong data/users.json`);
+            continue;
+        }
+
+        const nameResult = findNameInRows(rows, user.name);
+        if (!nameResult.row) {
+            report.failed++;
+            report.details.push(`❌ ${label}: không tìm thấy tên trong sheet`);
+            if (!isTest) await sendErrorToUser(client, user.discordId, `Không tìm thấy tên "${user.name}" trong sheet`);
+            continue;
+        }
+
+        if (todayColumn === -1) {
+            report.failed++;
+            report.details.push(`❌ ${label}: sheet chưa có ngày ${formatDayMonth(date)}`);
+            if (!isTest) await sendErrorToUser(client, user.discordId, `Không tìm thấy ngày "${formatDayMonth(date)}" trong sheet`);
+            continue;
+        }
+
+        const food = getMealAt(rows, nameResult.row, todayColumn);
+
+        // Không đặt cơm hôm nay thì không gửi
+        if (isEmptyMeal(food)) {
+            report.skipped++;
+            report.details.push(`⏭️ ${label}: không đặt cơm`);
+            continue;
+        }
+
+        deliveries.push({
+            user,
+            label,
+            meal: {
+                name: nameResult.name || user.name,
+                date,
+                food,
+                tomorrow:
+                    tomorrowColumn === -1
+                        ? null
+                        : { date: tomorrow, value: getMealAt(rows, nameResult.row, tomorrowColumn) },
+            },
+        });
+    }
+
+    // Bước 2: vẽ poster cho tất cả trong 1 tiến trình con. Lỗi thì dùng thẻ chữ,
+    // không để lỗi vẽ ảnh làm mất tin báo cơm
+    let posters = [];
+    try {
+        posters = await renderPostersInChildProcess(
+            deliveries.map(({ meal }) => ({
+                dish: meal.food,
+                name: meal.name,
+                date: meal.date,
+                tomorrow: meal.tomorrow,
+            }))
+        );
+    } catch (error) {
+        console.error(`❌ Không vẽ được poster báo cơm, dùng thẻ chữ: ${error.message}`);
+    }
+
+    // Bước 3: gửi
+    for (const [index, { user, label, meal }] of deliveries.entries()) {
+        try {
+            const png = posters[index];
+            const card = buildDailyMealCard({ ...meal, posterFileName: png ? POSTER_FILE_NAME : null });
+            const files = png ? [new AttachmentBuilder(png, { name: POSTER_FILE_NAME })] : [];
+
+            const result = await sendCardToUser(client, deliverToId || user.discordId, card, { files });
+            if (result.success) {
+                report.sent++;
+                report.details.push(`✅ ${label}${png ? "" : " (thẻ chữ)"}`);
+            } else {
+                report.failed++;
+                report.details.push(`❌ ${label}: ${result.error}`);
+            }
+
+            // Delay nhỏ giữa các lần gửi để tránh rate limit
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+            report.failed++;
+            report.details.push(`❌ ${label}: ${error.message}`);
+        }
+    }
+
+    console.log(
+        `🍽️ Thông báo món ăn ${formatDayMonth(date)}: gửi ${report.sent}, ` +
+        `bỏ qua ${report.skipped}, lỗi ${report.failed} / ${report.total}`
+    );
+    return report;
+}
+
+// Hàm khởi tạo scheduler
+function startDailyFoodScheduler(client, deps) {
+    // 00 12 * * * = 12:00 mỗi ngày (chỉ gửi vào ngày làm việc)
     const cronExpression = "00 12 * * *";
 
     cron.schedule(cronExpression, async () => {
-        // Kiểm tra xem hôm nay có phải là thứ 2-6 không
-        if (!isWeekday()) {
+        if (!isWorkingDay(new Date())) {
             console.log(
-                `⏭️ Hôm nay không phải ngày làm việc (T2-T6), bỏ qua gửi thông báo`
+                "⏭️ Hôm nay không phải ngày làm việc (T2-T6 hoặc ngày làm bù), bỏ qua gửi thông báo"
             );
             return;
         }
 
-        // Xác định sheet đang dùng (DEFAULT_SHEET_NAME hoặc fallback qua G_SHEET_ID)
-        const resolvedSheet = await resolveSheetName();
-        if (resolvedSheet.error) {
-            console.error(
-                `❌ Không xác định được sheet để gửi thông báo món ăn: ${resolvedSheet.error}`
-            );
-            return;
-        }
-        const sheetName = resolvedSheet.sheetName;
-
-        // Đọc danh sách users từ file
-        const enabledUsers = loadUsersFromFile();
-
-        if (enabledUsers.length === 0) {
-            return;
-        }
-
-        // Gửi thông báo cho từng user
-        for (const user of enabledUsers) {
-            try {
-                const foodData = await getTodayFoodForUser(
-                    sheetName,
-                    user.name,
-                    findNameInColumn,
-                    findDateInRow,
-                    getCellValue
-                );
-
-                if (foodData.error) {
-                    // Vẫn gửi thông báo lỗi cho user
-                    try {
-                        const discordUser = await client.users.fetch(
-                            user.discordId
-                        );
-                        await discordUser.send(
-                            `⚠️ **Thông báo món ăn hôm nay**\n\n` +
-                            `❌ Không thể lấy thông tin món ăn:\n${foodData.error}\n\n` +
-                            `_Thời gian: ${new Date().toLocaleString(
-                                "vi-VN"
-                            )}_`
-                        );
-                    } catch (error) {
-                        // Silent fail
-                    }
-                    continue;
-                }
-
-                // Kiểm tra nếu món ăn là rỗng, null, undefined, hoặc "0" thì không gửi
-                const foodValue = foodData.food?.toString().trim() || "";
-                if (
-                    foodValue === "" ||
-                    foodValue === "0" ||
-                    foodValue === "(trống)" ||
-                    foodValue === "null" ||
-                    foodValue === "undefined"
-                ) {
-                    continue;
-                }
-
-                // Gửi thông báo cho user
-                await sendDailyFoodNotification(
-                    client,
-                    user.discordId,
-                    foodData
-                );
-
-                // Delay nhỏ giữa các lần gửi để tránh rate limit
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-            } catch (error) {
-                // Silent fail
-            }
+        try {
+            await runDailyFoodNotification(client, deps);
+        } catch (error) {
+            console.error(`❌ Lỗi khi gửi thông báo món ăn: ${error.message}`);
         }
     });
-
-    // Test ngay lập tức (tùy chọn - có thể comment lại)
-    // setTimeout(async () => {
-    //     const enabledUsers = loadUsersFromFile();
-
-    //     if (enabledUsers.length === 0) {
-    //         return;
-    //     }
-
-    //     for (const user of enabledUsers) {
-    //         try {
-    //             const foodData = await getTodayFoodForUser(
-    //                 sheetName,
-    //                 user.name,
-    //                 findNameInColumn,
-    //                 findDateInRow,
-    //                 getCellValue
-    //             );
-
-    //             if (foodData.error) {
-    //                 try {
-    //                     const discordUser = await client.users.fetch(
-    //                         user.discordId
-    //                     );
-    //                     await discordUser.send(
-    //                         `⚠️ **Thông báo món ăn hôm nay**\n\n` +
-    //                             `❌ Không thể lấy thông tin món ăn:\n${foodData.error}\n\n` +
-    //                             `_Thời gian: ${new Date().toLocaleString(
-    //                                 "vi-VN"
-    //                             )}_`
-    //                     );
-    //                 } catch (error) {
-    //                     // Silent fail
-    //                 }
-    //                 continue;
-    //             }
-
-    //             await sendDailyFoodNotification(
-    //                 client,
-    //                 user.discordId,
-    //                 foodData
-    //             );
-    //             await new Promise((resolve) => setTimeout(resolve, 1000));
-    //         } catch (error) {
-    //             // Silent fail
-    //         }
-    //     }
-    // }, 5000);
 }
 
 module.exports = {
     startDailyFoodScheduler,
-    getTodayFoodForUser,
-    sendDailyFoodNotification,
-    getTodayDate,
-    isWeekday,
+    runDailyFoodNotification,
     loadUsersFromFile,
 };

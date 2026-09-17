@@ -4,6 +4,7 @@ const {
     SlashCommandBuilder,
     PermissionFlagsBits,
     InteractionContextType,
+    ApplicationIntegrationType,
     MessageFlags,
     REST,
     Routes,
@@ -19,7 +20,9 @@ const {
 const {
     fbdateCommand,
     fbnameCommand,
+    testFootballCommand,
     handleFootballCommands,
+    handleTestFootballCommand,
 } = require("./commands/football");
 const {
     testSendGifCommand,
@@ -30,6 +33,14 @@ const {
 const {
     startStandupScheduler,
 } = require("./scheduler/standup-notification");
+const {
+    testMealCommand,
+    handleAbcomCommand,
+    handleMealWeekButton,
+    handleTestMealCommand,
+} = require("./commands/meal");
+const { lamBuCommand, handleLamBuCommand } = require("./commands/makeup-day");
+const { MEAL_WEEK_BUTTON_ID } = require("./utils/meal-card");
 const {
     startDailyFoodScheduler,
 } = require("./scheduler/daily-food-notification");
@@ -116,6 +127,7 @@ client.once("ready", async () => {
                 )
                 .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
                 .setContexts([InteractionContextType.Guild])
+                .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
                 .addStringOption((option) =>
                     option
                         .setName("sheet_id")
@@ -133,6 +145,9 @@ client.once("ready", async () => {
                 .toJSON(),
             testSendGifCommand, // Thêm command /test-send-gif (root only)
             testStandupCommand, // Thêm command /test-standup (root only)
+            testMealCommand, // Thêm command /test-meal (root only)
+            lamBuCommand, // Thêm command /lam-bu (admin only)
+            testFootballCommand, // Thêm command /test-football (root only)
             new SlashCommandBuilder()
                 .setName("testsheetcheck")
                 .setDescription(
@@ -140,6 +155,7 @@ client.once("ready", async () => {
                 )
                 .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
                 .setContexts([InteractionContextType.Guild])
+                .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
                 .toJSON(),
         ];
 
@@ -148,20 +164,14 @@ client.once("ready", async () => {
         });
 
         console.log(
-            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck, /test-send-gif, /test-standup"
+            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck, /test-send-gif, /test-standup, /test-meal, /lam-bu, /fbdate, /fbname, /test-football"
         );
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
     }
 
     // Khởi động scheduler gửi thông báo món ăn hàng ngày
-    startDailyFoodScheduler(
-        client,
-        resolveSheetName,
-        findNameInColumn,
-        findDateInRow,
-        getCellValue
-    );
+    startDailyFoodScheduler(client, mealDeps);
 
     // Khởi động scheduler nhắc đứng dậy lúc 12:00 (gửi sau thông báo món ăn 30s)
     startStandupScheduler(client);
@@ -215,6 +225,34 @@ async function initializeAuth() {
 
 // Kết nối với Google Sheets API
 const sheets = google.sheets({ version: "v4" });
+
+// Đọc toàn bộ 1 tab trong 1 lần gọi API (thẻ báo cơm, /abcom). Tra cứu trong bộ
+// nhớ thay vì gọi API cho từng người - Google Sheets giới hạn 60 lần đọc/phút
+async function readSheetGrid(sheetName) {
+    if (!authClient) {
+        return { error: "Google Auth chưa được khởi tạo" };
+    }
+
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: process.env.SHEET_ID,
+            range: `'${sheetName.replace(/'/g, "''")}'`,
+            auth: authClient,
+        });
+        return { rows: response.data.values || [] };
+    } catch (err) {
+        console.error("❌ Lỗi khi đọc toàn bộ sheet:", err);
+        return { error: "Lỗi kết nối Google Sheets" };
+    }
+}
+
+// Phụ thuộc dùng chung cho các lệnh / scheduler về cơm
+const mealDeps = {
+    resolveSheetName,
+    readSheetGrid,
+    getUserNameByDiscordId,
+    adminDiscordId: ADMIN_DISCORD_ID,
+};
 
 // Lấy danh sách các tab (sheets.properties) của spreadsheet hiện tại
 async function getSpreadsheetSheetsMetadata() {
@@ -604,17 +642,6 @@ function isTodayDate(dateText) {
     return normalizeDateText(dateText) === getTodayDate();
 }
 
-function formatValueWithDate(valueWithDate, indent = "") {
-    const value = valueWithDate.value || "(trống)";
-    const line = `${indent}${valueWithDate.date}: ${value}`;
-
-    if (!isTodayDate(valueWithDate.date)) {
-        return line;
-    }
-
-    return `${indent}👉 **${valueWithDate.date} (Hôm nay): ${value}**`;
-}
-
 // Hàm lấy toàn bộ dòng và trả về 5 giá trị cuối cùng kèm ngày
 async function getLast5ValuesInRow(sheetName, row) {
     if (!authClient) {
@@ -714,216 +741,20 @@ async function getLast5ValuesInRow(sheetName, row) {
     }
 }
 
-// Hàm xử lý kết quả tìm kiếm (nhiều matches hoặc một match)
-async function processSearchResult(
-    nameResult,
-    day,
-    DEFAULT_SHEET_NAME,
-    searchQuery
-) {
-    // Nếu có nhiều matches, xử lý tất cả
-    if (nameResult.matches) {
-        const results = [];
-
-        for (const match of nameResult.matches) {
-            if (day) {
-                const dateResult = await findDateInRow(DEFAULT_SHEET_NAME, day);
-                if (!dateResult.error) {
-                    const cellResult = await getCellValue(
-                        DEFAULT_SHEET_NAME,
-                        dateResult.column,
-                        match.row
-                    );
-                    if (!cellResult.error) {
-                        results.push({
-                            name: match.name,
-                            row: match.row,
-                            day: day,
-                            position: `${dateResult.column}${match.row}`,
-                            value: cellResult.value || "(trống)",
-                        });
-                    }
-                }
-            } else {
-                const rowResult = await getLast5ValuesInRow(
-                    DEFAULT_SHEET_NAME,
-                    match.row
-                );
-                if (!rowResult.error) {
-                    results.push({
-                        name: match.name,
-                        row: match.row,
-                        valuesWithDates: rowResult.valuesWithDates || [],
-                        fromToday: rowResult.fromToday || false,
-                    });
-                }
-            }
-        }
-
-        return {
-            success: true,
-            multiple: true,
-            data: results,
-            count: nameResult.matches.length,
-        };
-    }
-
-    // Xử lý một kết quả duy nhất
-    const foundRow = nameResult.row;
-    const foundName = nameResult.name || searchQuery;
-
-    if (day) {
-        const dateResult = await findDateInRow(DEFAULT_SHEET_NAME, day);
-        if (dateResult.error) {
-            return { error: dateResult.error };
-        }
-
-        const cellResult = await getCellValue(
-            DEFAULT_SHEET_NAME,
-            dateResult.column,
-            foundRow
-        );
-
-        if (cellResult.error) {
-            return { error: cellResult.error };
-        }
-
-        return {
-            success: true,
-            multiple: false,
-            data: {
-                name: foundName,
-                day: day,
-                position: `${dateResult.column}${foundRow}`,
-                value: cellResult.value || "(trống)",
-            },
-        };
-    } else {
-        const rowResult = await getLast5ValuesInRow(
-            DEFAULT_SHEET_NAME,
-            foundRow
-        );
-        if (rowResult.error) {
-            return { error: rowResult.error };
-        }
-
-        return {
-            success: true,
-            multiple: false,
-            data: {
-                name: foundName,
-                row: foundRow,
-                valuesWithDates: rowResult.valuesWithDates || [],
-                fromToday: rowResult.fromToday || false,
-            },
-        };
-    }
-}
-
 client.on("interactionCreate", async (interaction) => {
+    // Nút "📅 Xem cả tuần" trên thẻ báo cơm
+    if (interaction.isButton() && interaction.customId === MEAL_WEEK_BUTTON_ID) {
+        try {
+            await handleMealWeekButton(interaction, mealDeps);
+        } catch (error) {
+            console.error("❌ Lỗi khi xử lý nút Xem cả tuần:", error);
+        }
+        return;
+    }
+
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === "abcom") {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            let name = interaction.options.getString("name");
-            const day = interaction.options.getString("day");
-
-            if (!name) {
-                name = getUserNameByDiscordId(interaction.user.id);
-                if (!name) {
-                    await interaction.editReply(
-                        "❌ Không tìm thấy tên của bạn trong hệ thống, vui lòng nhập tên thủ công"
-                    );
-                    return;
-                }
-            }
-
-            const resolvedSheet = await resolveSheetName();
-            if (resolvedSheet.error) {
-                await interaction.editReply(`❌ ${resolvedSheet.error}`);
-                return;
-            }
-            const DEFAULT_SHEET_NAME = resolvedSheet.sheetName;
-
-            const nameResult = await findNameInColumn(DEFAULT_SHEET_NAME, name);
-            if (nameResult.error) {
-                await interaction.editReply(`❌ ${nameResult.error}`);
-                return;
-            }
-
-            const result = await processSearchResult(
-                nameResult,
-                day,
-                DEFAULT_SHEET_NAME,
-                name
-            );
-            if (result.error) {
-                await interaction.editReply(`❌ ${result.error}`);
-                return;
-            }
-
-            // Xử lý nhiều kết quả
-            if (result.multiple) {
-                let output = `📊 Tìm thấy **${result.count}** kết quả phù hợp với "${name}":\n\n`;
-
-                for (let i = 0; i < result.data.length; i++) {
-                    const item = result.data[i];
-                    if (item.value !== undefined) {
-                        // Có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
-                            })\n`;
-                        output += `   📅 Ngày: ${item.day} | Vị trí: ${item.position}\n`;
-                        output += `   🍽️ Món ăn: ${item.value}\n\n`;
-                    } else {
-                        // Không có ngày
-                        output += `**${i + 1}. ${item.name}** (dòng ${item.row
-                            })\n`;
-                        if (
-                            item.valuesWithDates &&
-                            item.valuesWithDates.length > 0
-                        ) {
-                            const valuesText = item.valuesWithDates
-                                .map((v) => formatValueWithDate(v, "   "))
-                                .join("\n");
-                            const label = item.fromToday
-                                ? "5 giá trị từ hôm nay"
-                                : "5 giá trị cuối cùng";
-                            output += `   ${label}:\n${valuesText}\n\n`;
-                        } else {
-                            output += `   Không có dữ liệu\n\n`;
-                        }
-                    }
-                }
-
-                await interaction.editReply(output);
-                return;
-            }
-
-            // Xử lý một kết quả
-            if (result.data.value !== undefined) {
-                await interaction.editReply(
-                    `📊**Món ăn:** ${result.data.value}\n **Tên:** ${result.data.name}\n**Ngày:** ${result.data.day}\n**Vị trí:** ${result.data.position}\n`
-                );
-            } else {
-                if (
-                    !result?.data?.valuesWithDates ||
-                    result.data.valuesWithDates.length === 0
-                ) {
-                    await interaction.editReply(
-                        `📊 **Tên:** ${result.data.name}\n**Dòng:** ${result.data.row}\n**Kết quả:** Không có dữ liệu`
-                    );
-                } else {
-                    const valuesText = result.data.valuesWithDates
-                        .map((v) => formatValueWithDate(v))
-                        .join("\n");
-                    const label = result.data.fromToday
-                        ? "5 giá trị từ hôm nay"
-                        : "5 giá trị cuối cùng";
-                    await interaction.editReply(
-                        `📊 **Tên:** ${result.data.name}\n**Dòng:** ${result.data.row}\n**${label}:**\n${valuesText}`
-                    );
-                }
-            }
+            await handleAbcomCommand(interaction, mealDeps);
         } else if (interaction.commandName === "abc") {
             await handleAbcCommand(interaction);
         } else if (interaction.commandName === "help") {
@@ -972,6 +803,12 @@ client.on("interactionCreate", async (interaction) => {
             await handleTestSendGifCommand(interaction, ADMIN_DISCORD_ID);
         } else if (interaction.commandName === "test-standup") {
             await handleTestStandupCommand(interaction, ADMIN_DISCORD_ID);
+        } else if (interaction.commandName === "test-meal") {
+            await handleTestMealCommand(interaction, mealDeps);
+        } else if (interaction.commandName === "lam-bu") {
+            await handleLamBuCommand(interaction, mealDeps);
+        } else if (interaction.commandName === "test-football") {
+            await handleTestFootballCommand(interaction, ADMIN_DISCORD_ID);
         } else if (interaction.commandName === "configsheet") {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
                 await interaction.reply({

@@ -1,17 +1,16 @@
 const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
-const { EmbedBuilder } = require("discord.js");
-
-const TARGET_TEAMS = [
-    "Arsenal",
-    "Manchester City",
-    "Manchester United",
-    "Liverpool",
-    "Chelsea",
-    "Tottenham Hotspur",
-    "Aston Villa",
-];
+const {
+    FEATURED_TEAMS,
+    getMatchesBetween,
+    getWeekRange,
+    isTeamInMatch,
+} = require("../utils/football");
+const { buildWeekCard } = require("../utils/football-card");
+const { sendCardToUser } = require("../utils/card-message");
+const { getTeamEmojis, teamsOfMatches } = require("../utils/team-emoji");
+const { addDays, formatDayMonth } = require("../utils/workdays");
 
 // Lấy danh sách user có football_notify = true
 function loadFootballUsers() {
@@ -19,163 +18,135 @@ function loadFootballUsers() {
         const usersFilePath = path.join(__dirname, "../data/users.json");
         const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
 
-        const enabledUsers = usersData.users.filter(
+        return usersData.users.filter(
             (user) => user.football_notify === true && user.discordId !== null
         );
-
-        return enabledUsers;
     } catch (error) {
         console.error("Lỗi khi đọc data/users.json:", error);
         return [];
     }
 }
 
-// Format ngày tháng cho ESPN API
-const formatDateForESPN = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const d_ = String(d.getDate()).padStart(2, "0");
-    return `${y}${m}${d_}`;
-};
-
-// Hàm tạo Embed cho 1 trận đấu
-function createMatchEmbed(event) {
-    const competitors = event.competitions[0].competitors;
-    const homeTeam = competitors.find((c) => c.homeAway === "home");
-    const awayTeam = competitors.find((c) => c.homeAway === "away");
-    
-    const homeName = homeTeam.team.displayName;
-    const awayName = awayTeam.team.displayName;
-    const homeLogo = homeTeam.team.logo;
-    const awayLogo = awayTeam.team.logo;
-    
-    const isCompleted = event.status.type.completed;
-    
-    const embed = new EmbedBuilder()
-        .setAuthor({ 
-            name: "Ngoại hạng Anh", 
-            iconURL: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png" 
-        })
-        .setTitle(`${homeName}  ⚔️  ${awayName}`)
-        .setThumbnail(homeLogo) // Logo đội nhà
-        .setFooter({ text: `Đội khách: ${awayName}`, iconURL: awayLogo }); // Logo đội khách
-        
-    if (isCompleted) {
-        const homeScore = homeTeam.score;
-        const awayScore = awayTeam.score;
-        embed.setColor(0x00FF00); // Xanh lá
-        embed.addFields(
-            { name: "🏆 Tỉ số", value: `**${homeScore} - ${awayScore}**`, inline: true },
-            { name: "📌 Trạng thái", value: "Đã kết thúc", inline: true }
-        );
-    } else {
-        const time = new Date(event.date).toLocaleString("vi-VN", {
-            timeZone: "Asia/Ho_Chi_Minh",
-            hour: "2-digit",
-            minute: "2-digit",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric"
-        });
-        embed.setColor(0x0099FF); // Xanh dương
-        embed.addFields(
-            { name: "🕒 Thời gian", value: time, inline: true },
-            { name: "📌 Trạng thái", value: "Sắp diễn ra", inline: true }
-        );
+// Tìm user trong users.json theo Discord ID (dùng khi test)
+function findUserById(discordId) {
+    try {
+        const usersFilePath = path.join(__dirname, "../data/users.json");
+        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
+        return usersData.users.find((u) => u.discordId === discordId) || null;
+    } catch (error) {
+        return null;
     }
-
-    return embed;
 }
 
-// Lấy trận đấu của các đội top trong tuần hiện tại
-async function getWeeklyMatches() {
+// Các trận trong tuần hiện tại có ít nhất 1 đội thuộc nhóm theo dõi
+async function getWeeklyMatches(date = new Date()) {
+    const week = getWeekRange(date);
+    const matches = await getMatchesBetween(week.monday, week.sunday);
+    return {
+        week,
+        matches: matches.filter((m) => FEATURED_TEAMS.some((team) => isTeamInMatch(m, team))),
+    };
+}
+
+/**
+ * Gửi tin lịch thi đấu trong tuần của nhóm đội theo dõi.
+ * @param {object} client - Discord client
+ * @param {object} options
+ * @param {string[]|null} options.targetUserIds - Chỉ gửi cho các ID này (test)
+ * @returns {object} { sent, failed, total, matchCount, details, error }
+ */
+async function runFootballNotification(client, { targetUserIds = null } = {}) {
+    const report = { sent: 0, failed: 0, total: 0, matchCount: 0, details: [], error: null };
+    const isTest = Boolean(targetUserIds);
+
+    const recipients = isTest
+        ? targetUserIds.map((id) => findUserById(id) || { discordId: id, name: null })
+        : loadFootballUsers();
+    report.total = recipients.length;
+
+    if (recipients.length === 0) {
+        console.log("Không có user nào đăng ký nhận thông báo bóng đá.");
+        return report;
+    }
+
+    let week;
+    let matches;
+    try {
+        ({ week, matches } = await getWeeklyMatches());
+    } catch (error) {
+        report.error = `Không lấy được lịch thi đấu từ ESPN: ${error.message}`;
+        console.error(`❌ ${report.error}`);
+        return report;
+    }
+    report.matchCount = matches.length;
+
+    // Cron thật: tuần không có trận thì không gửi. Test vẫn gửi để xem thẻ trống
+    if (matches.length === 0 && !isTest) {
+        console.log("Không có trận đấu nào của Top 6 + Aston Villa trong tuần này.");
+        return report;
+    }
+
+    const card = buildWeekCard({
+        title: `🗓️ Lịch tuần ${formatDayMonth(week.monday)} – ${formatDayMonth(week.sunday)}`,
+        subtitle: "Top 6 + Aston Villa",
+        matches,
+        emptyText: "Tuần này các đội theo dõi không có trận nào.",
+        emojis: await getTeamEmojis(client, teamsOfMatches(matches)),
+    });
+
+    for (const user of recipients) {
+        const result = await sendCardToUser(client, user.discordId, card);
+        const displayName =
+            user.name || result.user?.globalName || result.user?.username || user.discordId;
+
+        if (result.success) {
+            report.sent++;
+            report.details.push(`✅ ${displayName}`);
+        } else {
+            report.failed++;
+            report.details.push(`❌ ${displayName}: ${result.error}`);
+        }
+
+        // Delay 1 giây tránh rate limit
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    console.log(`⚽ Thông báo bóng đá: gửi ${report.sent}/${report.total} (${matches.length} trận)`);
+    return report;
+}
+
+// Tạo sẵn emoji logo cho các đội có trận trong khoảng 45 ngày tới, để lệnh bóng
+// đá đầu tiên không phải chờ tạo emoji. Chạy nền, lỗi chỉ ghi log.
+async function warmUpTeamEmojis(client) {
     try {
         const today = new Date();
-        const day = today.getDay();
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(new Date().setDate(diff));
-        const sunday = new Date(new Date().setDate(diff + 6));
-
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=${formatDateForESPN(
-            monday
-        )}-${formatDateForESPN(sunday)}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (!data.events) return [];
-
-        const embeds = [];
-
-        data.events.forEach((event) => {
-            const competitors = event.competitions[0].competitors;
-            const homeTeam = competitors.find((c) => c.homeAway === "home");
-            const awayTeam = competitors.find((c) => c.homeAway === "away");
-
-            const homeName = homeTeam.team.displayName;
-            const awayName = awayTeam.team.displayName;
-
-            // Kiểm tra xem trận này có đội trong top 6 + Aston Villa không
-            const isTargetMatch =
-                TARGET_TEAMS.includes(homeName) ||
-                TARGET_TEAMS.includes(awayName);
-
-            if (isTargetMatch) {
-                embeds.push(createMatchEmbed(event));
-            }
-        });
-
-        return embeds;
+        const matches = await getMatchesBetween(today, addDays(today, 45));
+        const emojis = await getTeamEmojis(client, teamsOfMatches(matches));
+        console.log(`✅ Emoji logo đội bóng sẵn sàng: ${emojis.size} đội`);
     } catch (error) {
-        console.error("Lỗi khi lấy dữ liệu bóng đá:", error);
-        return [];
+        console.error(`❌ Không chuẩn bị được emoji logo đội bóng: ${error.message}`);
     }
 }
 
 // Khởi tạo scheduler
 function startFootballScheduler(client) {
+    warmUpTeamEmojis(client);
+
     // Gửi thông báo vào 10h sáng Thứ 2 và Thứ 6 hàng tuần
     const cronExpression = "0 10 * * 1,5";
 
     cron.schedule(cronExpression, async () => {
         console.log("Đang chạy lịch thông báo bóng đá Ngoại hạng Anh...");
-        const users = loadFootballUsers();
-
-        if (users.length === 0) {
-            console.log("Không có user nào đăng ký nhận thông báo bóng đá.");
-            return;
+        try {
+            await runFootballNotification(client);
+        } catch (error) {
+            console.error(`❌ Lỗi khi gửi thông báo bóng đá: ${error.message}`);
         }
-
-        const embeds = await getWeeklyMatches();
-
-        if (embeds.length === 0) {
-            console.log("Không có trận đấu nào của Top 6 + Aston Villa trong tuần này.");
-            return;
-        }
-
-        for (const user of users) {
-            try {
-                const discordUser = await client.users.fetch(user.discordId);
-                await discordUser.send({
-                    content: `⚽ **Cập nhật Ngoại hạng Anh trong tuần (Top 6 + Aston Villa)** ⚽`,
-                    embeds: embeds.slice(0, 10)
-                });
-                
-                if (embeds.length > 10) {
-                    await discordUser.send({ embeds: embeds.slice(10, 20) });
-                }
-
-                // Delay 1 giây tránh rate limit
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-            } catch (err) {
-                console.error(`Không thể gửi tin nhắn bóng đá cho ${user.name}:`, err);
-            }
-        }
-        console.log("Đã gửi xong thông báo bóng đá.");
     });
 }
 
 module.exports = {
     startFootballScheduler,
+    runFootballNotification,
     getWeeklyMatches, // Export để test nếu cần
 };

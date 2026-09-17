@@ -3,6 +3,8 @@ const {
     EmbedBuilder,
     PermissionFlagsBits,
     MessageFlags,
+    InteractionContextType,
+    ApplicationIntegrationType,
 } = require("discord.js");
 const { fetchGif, getActiveProviderName } = require("../utils/gif");
 
@@ -11,6 +13,10 @@ const testSendGifCommand = new SlashCommandBuilder()
     .setName("test-send-gif")
     .setDescription("[Root] Test gửi GIF cá nhân qua DM cho một người")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    // Chỉ dùng trong server: trong DM Discord không áp dụng quyền Administrator,
+    // nên không giới hạn thì ai DM với bot cũng thấy lệnh này
+    .setContexts([InteractionContextType.Guild])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
     .addUserOption((option) =>
         option
             .setName("user")
@@ -60,6 +66,10 @@ const testStandupCommand = new SlashCommandBuilder()
     .setName("test-standup")
     .setDescription("[Root] Test ngay thông báo 12h 'hãy đứng dậy' kèm GIF")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    // Chỉ dùng trong server: trong DM Discord không áp dụng quyền Administrator,
+    // nên không giới hạn thì ai DM với bot cũng thấy lệnh này
+    .setContexts([InteractionContextType.Guild])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
     .addBooleanOption((option) =>
         option
             .setName("all")
