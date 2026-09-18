@@ -17,14 +17,15 @@ function cardPayload(container, { ephemeral = false, files = [] } = {}) {
 }
 
 /**
- * Gửi thẻ qua DM. Trả về { success, user, error } để nơi gọi tự báo cáo.
+ * Gửi thẻ qua DM. Trả về { success, user, message, error } để nơi gọi tự báo cáo
+ * (message = tin vừa gửi, dùng khi cần xóa tin sau này).
  */
 async function sendCardToUser(client, discordId, container, { files = [] } = {}) {
     let user = null;
     try {
         user = await client.users.fetch(discordId);
-        await user.send(cardPayload(container, { files }));
-        return { success: true, user };
+        const message = await user.send(cardPayload(container, { files }));
+        return { success: true, user, message };
     } catch (error) {
         // 50007 = Cannot send messages to this user (chặn DM / không chung server)
         if (error.code === 50007) {

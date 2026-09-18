@@ -77,6 +77,42 @@ function recordGifSent(url, date = new Date()) {
     }
 }
 
+// Tin nhắc đứng dậy gần nhất đã gửi cho từng người: { discordId: { channelId, messageId, sentAt } }.
+// Gửi tin mới thì xóa tin cũ, để DM mỗi người chỉ còn 1 tin (nhiều GIF trông rối mắt)
+const LAST_MESSAGES_FILE = path.join(__dirname, "../data/standup-last-messages.json");
+
+function loadLastMessages() {
+    try {
+        const data = JSON.parse(fs.readFileSync(LAST_MESSAGES_FILE, "utf8"));
+        return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+    } catch (error) {
+        return {}; // chưa có file (lần chạy đầu) hoặc file hỏng
+    }
+}
+
+function saveLastMessages(lastMessages) {
+    try {
+        const tmpFile = `${LAST_MESSAGES_FILE}.tmp`;
+        fs.writeFileSync(tmpFile, JSON.stringify(lastMessages, null, 2), "utf8");
+        fs.renameSync(tmpFile, LAST_MESSAGES_FILE);
+    } catch (error) {
+        console.error(`❌ Không lưu được tin nhắc đứng dậy đã gửi: ${error.message}`);
+    }
+}
+
+// Xóa tin nhắc đứng dậy cũ trong DM. Tin đã bị xóa rồi thì bỏ qua
+async function deletePreviousStandup(client, previous) {
+    try {
+        const channel = await client.channels.fetch(previous.channelId);
+        await channel.messages.delete(previous.messageId);
+    } catch (error) {
+        // 10008 = Unknown Message, 10003 = Unknown Channel: tin / kênh không còn
+        if (error.code !== 10008 && error.code !== 10003) {
+            console.error(`⚠️ Không xóa được tin nhắc đứng dậy cũ: ${error.message}`);
+        }
+    }
+}
+
 // Số ngày lịch (theo giờ máy, TZ=Asia/Ho_Chi_Minh) giữa 2 thời điểm, bỏ qua giờ phút
 function daysBetween(from, to) {
     const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -232,6 +268,8 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
     let sent = 0;
     let failed = 0;
 
+    const lastMessages = loadLastMessages();
+
     const card = buildStandupCard({
         message: STANDUP_MESSAGE,
         gifUrl: gif?.url || null,
@@ -250,6 +288,15 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
             if (result.success) {
                 sent++;
                 details.push(`✅ ${displayName}${note}`);
+
+                // Gửi được tin mới rồi mới xóa tin cũ của người này
+                const previous = lastMessages[user.discordId];
+                if (previous) await deletePreviousStandup(client, previous);
+                lastMessages[user.discordId] = {
+                    channelId: result.message.channelId,
+                    messageId: result.message.id,
+                    sentAt: new Date().toISOString(),
+                };
             } else {
                 failed++;
                 details.push(`❌ ${displayName}: ${result.error}`);
@@ -262,6 +309,8 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
             details.push(`❌ ${user.name || user.discordId}: ${error.message}`);
         }
     }
+
+    saveLastMessages(lastMessages);
 
     // Chỉ ghi lịch sử khi gửi thật cho mọi người (cron 12h hoặc /test-standup all:True).
     // Test gửi riêng cho 1 người không tính, để khỏi "đốt" GIF của những ngày tới.
