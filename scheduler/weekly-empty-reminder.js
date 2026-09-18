@@ -2,14 +2,18 @@ const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
 
-// Đọc danh sách users được bật thông báo món ăn
+// Đọc danh sách users nhận nhắc đặt cơm thứ 2. Tắt riêng cho ai thì đặt
+// "order_reminder": false (thiếu trường này thì vẫn nhắc)
 function loadUsersFromFile() {
     try {
         const usersFilePath = path.join(__dirname, "../data/users.json");
         const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
 
         return usersData.users.filter(
-            (user) => user.enabled === true && user.discordId !== null
+            (user) =>
+                user.enabled === true &&
+                user.discordId !== null &&
+                user.order_reminder !== false
         );
     } catch (error) {
         return [];
