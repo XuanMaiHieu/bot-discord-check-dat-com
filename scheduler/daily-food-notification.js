@@ -17,6 +17,10 @@ const { sendCardToUser } = require("../utils/card-message");
 const { renderPostersInChildProcess } = require("../utils/poster-renderer");
 const { loadRecipients, recipientsFromIds } = require("../utils/users");
 const { notifyAdmin } = require("../utils/admin");
+const { runStandupNotification } = require("./standup-notification");
+
+// Nhắc đứng dậy gửi sau thẻ báo cơm 30 giây, để 2 tin không chen nhau
+const STANDUP_DELAY_MS = 30 * 1000;
 
 const POSTER_FILE_NAME = "com-trua.png";
 
@@ -51,14 +55,15 @@ async function sendErrorToUser(client, discordId, message) {
  * @param {Date} options.date - Ngày cần báo (mặc định hôm nay; test có thể giả lập)
  * @param {string|null} options.deliverToId - Test: gửi thẻ về ID này thay vì chủ thẻ,
  *                                            và không DM báo lỗi cho chủ thẻ
- * @returns {object} { sent, skipped, failed, total, details, error }
+ * @returns {object} { sent, skipped, failed, total, details, error, sentIds }
+ *          sentIds = Discord ID của những người đã nhận thẻ báo cơm
  */
 async function runDailyFoodNotification(
     client,
     { resolveSheetName, readSheetGrid },
     { targetUserIds = null, date = new Date(), deliverToId = null } = {}
 ) {
-    const report = { sent: 0, skipped: 0, failed: 0, total: 0, details: [], error: null };
+    const report = { sent: 0, skipped: 0, failed: 0, total: 0, details: [], error: null, sentIds: [] };
     const isTest = Boolean(targetUserIds);
 
     const resolvedSheet = await resolveSheetName();
@@ -176,6 +181,7 @@ async function runDailyFoodNotification(
             const result = await sendCardToUser(client, deliverToId || user.discordId, card, { files });
             if (result.success) {
                 report.sent++;
+                report.sentIds.push(user.discordId);
                 report.details.push(`✅ ${label}${png ? "" : " (thẻ chữ)"}`);
             } else {
                 report.failed++;
@@ -197,29 +203,45 @@ async function runDailyFoodNotification(
     return report;
 }
 
+// 12:00 ngày làm việc: thẻ báo cơm, rồi nhắc đứng dậy cho đúng những người đã
+// nhận thẻ báo cơm (có đặt cơm hôm nay). Không ai nhận thẻ thì không nhắc
+async function runLunchNotifications(client, deps) {
+    let report;
+    try {
+        report = await runDailyFoodNotification(client, deps);
+    } catch (error) {
+        console.error(`❌ Lỗi khi gửi thông báo món ăn: ${error.message}`);
+        return;
+    }
+
+    if (report.sentIds.length === 0) {
+        console.log("⏭️ Không ai nhận thẻ báo cơm hôm nay, bỏ qua nhắc đứng dậy");
+        return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, STANDUP_DELAY_MS));
+    try {
+        await runStandupNotification(client, { onlyUserIds: report.sentIds });
+    } catch (error) {
+        console.error(`❌ Lỗi khi gửi thông báo đứng dậy: ${error.message}`);
+    }
+}
+
 // Hàm khởi tạo scheduler
 function startDailyFoodScheduler(client, deps) {
     // 00 12 * * * = 12:00 mỗi ngày (chỉ gửi vào ngày làm việc)
-    const cronExpression = "00 12 * * *";
-
-    cron.schedule(cronExpression, async () => {
+    cron.schedule("00 12 * * *", async () => {
         if (!isWorkingDay(new Date())) {
-            console.log(
-                "⏭️ Hôm nay không phải ngày làm việc (T2-T6 hoặc ngày làm bù), bỏ qua gửi thông báo"
-            );
+            console.log("⏭️ Hôm nay không phải ngày làm việc (T2-T6 hoặc ngày làm bù), bỏ qua báo cơm + đứng dậy");
             return;
         }
-
-        try {
-            await runDailyFoodNotification(client, deps);
-        } catch (error) {
-            console.error(`❌ Lỗi khi gửi thông báo món ăn: ${error.message}`);
-        }
+        await runLunchNotifications(client, deps);
     });
 }
 
 module.exports = {
     startDailyFoodScheduler,
     runDailyFoodNotification,
+    runLunchNotifications,
     loadUsersFromFile,
 };

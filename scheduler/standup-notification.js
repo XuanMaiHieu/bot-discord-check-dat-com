@@ -1,10 +1,8 @@
-const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
 const { fetchGif } = require("../utils/gif");
 const { buildStandupCard } = require("../utils/meal-card");
 const { sendCardToUser } = require("../utils/card-message");
-const { isWorkingDay } = require("../utils/workdays");
 const { loadRecipients, getUserNameByDiscordId } = require("../utils/users");
 
 // Nội dung thông báo đứng dậy (thẻ tự hiển thị cỡ chữ lớn, không cần markdown)
@@ -247,11 +245,14 @@ async function fetchStandupGifFromApi() {
  *
  * @param {object} client - Discord client
  * @param {object} options
- * @param {string[]} options.targetUserIds - Chỉ gửi cho các ID này (dùng khi test).
- *                                           Bỏ trống = gửi cho toàn bộ user trong users.json
+ * @param {string[]} options.targetUserIds - Test: gửi cho đúng các ID này.
+ * @param {string[]} options.onlyUserIds - Gửi thật (12h): chỉ những user nhận tin
+ *                                         đứng dậy mà có ID trong danh sách này
+ *                                         (người đã nhận thẻ báo cơm hôm nay).
+ *                   Bỏ trống cả 2 = gửi cho toàn bộ user nhận tin đứng dậy
  * @returns {object} { sent, failed, total, gif, details }
  */
-async function runStandupNotification(client, { targetUserIds = null } = {}) {
+async function runStandupNotification(client, { targetUserIds = null, onlyUserIds = null } = {}) {
     // Chỉ lấy GIF 1 lần rồi gửi chung cho mọi người, tránh đốt quota API
     const { gif, query, curated } = await fetchStandupGif();
 
@@ -262,7 +263,7 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
     // name = null nghĩa là chưa có trong users.json, sẽ lấy tên Discord khi gửi
     const recipients = targetUserIds
         ? targetUserIds.map((id) => ({ discordId: id, name: getUserNameByDiscordId(id) }))
-        : loadStandupUsers();
+        : loadStandupUsers().filter((user) => !onlyUserIds || onlyUserIds.includes(user.discordId));
 
     const details = [];
     let sent = 0;
@@ -326,35 +327,7 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
     return { sent, failed, total: recipients.length, gif, query, details };
 }
 
-// Hàm khởi tạo scheduler: 12:00 mỗi ngày làm việc (T2-T6), chạy sau /báo cơm
-function startStandupScheduler(client) {
-    // 00 12 * * * = 12:00 mỗi ngày.
-    // Scheduler báo cơm cũng chạy đúng 12:00, nên ở đây delay 30 giây để
-    // tin "đứng dậy" luôn tới sau tin báo cơm, không chen ngang.
-    const cronExpression = "00 12 * * *";
-
-    cron.schedule(cronExpression, async () => {
-        if (!isWorkingDay(new Date())) {
-            console.log(
-                "⏭️ Hôm nay không phải ngày làm việc (T2-T6 hoặc ngày làm bù), bỏ qua thông báo đứng dậy"
-            );
-            return;
-        }
-
-        setTimeout(async () => {
-            try {
-                await runStandupNotification(client);
-            } catch (error) {
-                console.error(`❌ Lỗi khi gửi thông báo đứng dậy: ${error.message}`);
-            }
-        }, 30 * 1000);
-    });
-
-    console.log("✅ Đã bật scheduler nhắc đứng dậy lúc 12:00 (T2-T6 + ngày làm bù)");
-}
-
 module.exports = {
-    startStandupScheduler,
     runStandupNotification,
     loadStandupUsers,
     loadLastMessages,
