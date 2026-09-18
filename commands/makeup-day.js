@@ -16,6 +16,7 @@ const {
     getUpcomingSaturday,
 } = require("../utils/workdays");
 const { findDateColumn } = require("../utils/meal-sheet");
+const { denyUnlessRoot } = require("../utils/admin");
 
 const DATE_OPTION_DESCRIPTION = "Ngày DD/MM, vd 26/09 (bỏ trống = thứ 7 tuần này)";
 
@@ -71,16 +72,10 @@ function listUpcomingMakeupDays() {
 
 /**
  * Xử lý /lam-bu.
- * @param {object} deps - { resolveSheetName, readSheetGrid, adminDiscordId }
+ * @param {object} deps - { resolveSheetName, readSheetGrid }
  */
 async function handleLamBuCommand(interaction, deps) {
-    if (interaction.user.id !== deps.adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này.",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+    if (await denyUnlessRoot(interaction)) return;
 
     const subcommand = interaction.options.getSubcommand();
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -158,6 +153,5 @@ async function handleLamBuCommand(interaction, deps) {
 }
 
 module.exports = {
-    lamBuCommand,
-    handleLamBuCommand,
+    commands: [{ data: lamBuCommand, execute: handleLamBuCommand }],
 };

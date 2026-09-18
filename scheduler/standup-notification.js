@@ -5,6 +5,7 @@ const { fetchGif } = require("../utils/gif");
 const { buildStandupCard } = require("../utils/meal-card");
 const { sendCardToUser } = require("../utils/card-message");
 const { isWorkingDay } = require("../utils/workdays");
+const { loadRecipients, getUserNameByDiscordId } = require("../utils/users");
 
 // Nội dung thông báo đứng dậy (thẻ tự hiển thị cỡ chữ lớn, không cần markdown)
 const STANDUP_MESSAGE = "🕛 Thời điểm đã đến, kính mời quý user hãy đứng dậy";
@@ -122,22 +123,7 @@ const STANDUP_GIF_EXCLUDE =
 // Mặc định mọi user đang enabled đều nhận; muốn tắt cho ai thì thêm
 // "standup_notify": false vào user đó trong data/users.json
 function loadStandupUsers() {
-    try {
-        const usersFilePath = path.join(__dirname, "../data/users.json");
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-
-        return usersData.users.filter(
-            (user) =>
-                user.enabled === true &&
-                user.discordId !== null &&
-                user.standup_notify !== false
-        );
-    } catch (error) {
-        console.error(
-            `❌ Không đọc được data/users.json cho thông báo đứng dậy: ${error.message}`
-        );
-        return [];
-    }
+    return loadRecipients((user) => user.enabled === true && user.standup_notify !== false);
 }
 
 function shuffle(list) {
@@ -220,17 +206,6 @@ async function fetchStandupGifFromApi() {
     return { gif: null, query: sources.map((s) => s.query).join(", ") };
 }
 
-// Tra tên hiển thị của 1 Discord ID: ưu tiên tên trong users.json
-function findUserNameById(discordId) {
-    try {
-        const usersFilePath = path.join(__dirname, "../data/users.json");
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-        return usersData.users.find((u) => u.discordId === discordId)?.name || null;
-    } catch (error) {
-        return null;
-    }
-}
-
 /**
  * Gửi thông báo "hãy đứng dậy" kèm GIF cho danh sách user.
  *
@@ -250,7 +225,7 @@ async function runStandupNotification(client, { targetUserIds = null } = {}) {
 
     // name = null nghĩa là chưa có trong users.json, sẽ lấy tên Discord khi gửi
     const recipients = targetUserIds
-        ? targetUserIds.map((id) => ({ discordId: id, name: findUserNameById(id) }))
+        ? targetUserIds.map((id) => ({ discordId: id, name: getUserNameByDiscordId(id) }))
         : loadStandupUsers();
 
     const details = [];

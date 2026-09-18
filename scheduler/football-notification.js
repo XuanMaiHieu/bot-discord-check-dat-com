@@ -1,6 +1,4 @@
 const cron = require("node-cron");
-const fs = require("fs");
-const path = require("path");
 const {
     FEATURED_TEAMS,
     getMatchesBetween,
@@ -11,31 +9,11 @@ const { buildWeekCard } = require("../utils/football-card");
 const { sendCardToUser } = require("../utils/card-message");
 const { getTeamEmojis, teamsOfMatches } = require("../utils/team-emoji");
 const { addDays, formatDayMonth } = require("../utils/workdays");
+const { loadRecipients, recipientsFromIds } = require("../utils/users");
 
-// Lấy danh sách user có football_notify = true
+// Người nhận lịch bóng đá
 function loadFootballUsers() {
-    try {
-        const usersFilePath = path.join(__dirname, "../data/users.json");
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-
-        return usersData.users.filter(
-            (user) => user.football_notify === true && user.discordId !== null
-        );
-    } catch (error) {
-        console.error("Lỗi khi đọc data/users.json:", error);
-        return [];
-    }
-}
-
-// Tìm user trong users.json theo Discord ID (dùng khi test)
-function findUserById(discordId) {
-    try {
-        const usersFilePath = path.join(__dirname, "../data/users.json");
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-        return usersData.users.find((u) => u.discordId === discordId) || null;
-    } catch (error) {
-        return null;
-    }
+    return loadRecipients((user) => user.football_notify === true);
 }
 
 // Các trận trong tuần hiện tại có ít nhất 1 đội thuộc nhóm theo dõi
@@ -59,9 +37,7 @@ async function runFootballNotification(client, { targetUserIds = null } = {}) {
     const report = { sent: 0, failed: 0, total: 0, matchCount: 0, details: [], error: null };
     const isTest = Boolean(targetUserIds);
 
-    const recipients = isTest
-        ? targetUserIds.map((id) => findUserById(id) || { discordId: id, name: null })
-        : loadFootballUsers();
+    const recipients = isTest ? recipientsFromIds(targetUserIds) : loadFootballUsers();
     report.total = recipients.length;
 
     if (recipients.length === 0) {

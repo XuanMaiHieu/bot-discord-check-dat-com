@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 
 // Định nghĩa command /abc
-const commandData = new SlashCommandBuilder()
+const abcCommand = new SlashCommandBuilder()
     .setName("abc")
     .setDescription("Gửi tin nhắn tự động cho user")
     .addStringOption((option) =>
@@ -46,6 +46,5 @@ async function handleAbcCommand(interaction) {
 }
 
 module.exports = {
-    commandData,
-    handleAbcCommand,
+    commands: [{ data: abcCommand, execute: handleAbcCommand }],
 };

@@ -7,7 +7,7 @@
  * - Ngày trong truy vấn tính theo giờ UTC. Trận 19:00 UTC thứ Hai là 02:00 thứ Ba
  *   giờ Việt Nam, nên phải lấy cả tháng rồi tự lọc theo giờ Việt Nam.
  */
-const { addDays, startOfDay } = require("./workdays");
+const { addDays, startOfDay, getWeekRange } = require("./workdays");
 
 const LEAGUE = {
     slug: "eng.1",
@@ -152,12 +152,6 @@ async function getMatchesBetween(from, to) {
         .map(normalizeEvent)
         .filter((m) => m.kickoff >= start && m.kickoff < end)
         .sort((a, b) => a.kickoff - b.kickoff);
-}
-
-// Thứ 2 và Chủ nhật của tuần chứa `date`
-function getWeekRange(date = new Date()) {
-    const monday = addDays(startOfDay(date), -((date.getDay() + 6) % 7));
-    return { monday, sunday: addDays(monday, 6) };
 }
 
 function isTeamInMatch(match, teamName) {

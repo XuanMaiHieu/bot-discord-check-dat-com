@@ -15,6 +15,7 @@ const { buildDayCard, buildWeekCard, matchLine } = require("../utils/football-ca
 const { cardPayload } = require("../utils/card-message");
 const { getTeamEmojis, teamsOfMatches } = require("../utils/team-emoji");
 const { addDays, formatDayMonth, formatLongDay, startOfDay } = require("../utils/workdays");
+const { denyUnlessRoot } = require("../utils/admin");
 
 // Tìm trận kế tiếp của 1 đội trong khoảng này khi tuần hiện tại không có trận
 const NEXT_MATCH_LOOKAHEAD_DAYS = 45;
@@ -137,14 +138,8 @@ async function handleFootballCommands(interaction) {
 /**
  * Xử lý /test-football: gửi thử tin bóng đá tự động cho chính root.
  */
-async function handleTestFootballCommand(interaction, adminDiscordId) {
-    if (interaction.user.id !== adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này (chỉ root mới được dùng).",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+async function handleTestFootballCommand(interaction) {
+    if (await denyUnlessRoot(interaction)) return;
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -170,10 +165,9 @@ async function handleTestFootballCommand(interaction, adminDiscordId) {
 }
 
 module.exports = {
-    fbdateCommand,
-    fbnameCommand,
-    testFootballCommand,
-    handleFootballCommands,
-    handleTestFootballCommand,
-    resolveDateChoice,
+    commands: [
+        { data: fbdateCommand, execute: handleFootballCommands },
+        { data: fbnameCommand, execute: handleFootballCommands },
+        { data: testFootballCommand, execute: handleTestFootballCommand },
+    ],
 };

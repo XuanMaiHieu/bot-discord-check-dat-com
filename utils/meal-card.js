@@ -21,7 +21,7 @@ const {
 const { isEmptyMeal } = require("./meal-sheet");
 const { getDishEmoji } = require("./dish-emoji");
 
-// customId của nút "📅 Xem cả tuần" - bot.js bắt sự kiện bấm nút theo id này
+// customId của nút "📅 Xem cả tuần" (đăng ký trong commands/meal.js)
 const MEAL_WEEK_BUTTON_ID = "meal:week";
 
 const EMPTY_MEAL_EMOJI = "⚪";

@@ -17,9 +17,26 @@ const {
     buildUpcomingMealsCard,
     buildSingleDayMealCard,
     buildMultipleMealsCard,
+    MEAL_WEEK_BUTTON_ID,
 } = require("../utils/meal-card");
 const { cardPayload } = require("../utils/card-message");
 const { parseDayMonth, formatLongDay, isWorkingDay } = require("../utils/workdays");
+const { denyUnlessRoot } = require("../utils/admin");
+
+// Định nghĩa command /abcom
+const abcomCommand = new SlashCommandBuilder()
+    .setName("abcom")
+    .setDescription("Tra cứu thông tin đăng ký cơm trưa")
+    .addStringOption((option) =>
+        option
+            .setName("name")
+            .setDescription("Tên cần tìm (bỏ trống để tự lấy tên của bạn, có thể nhập một phần tên)")
+            .setRequired(false)
+    )
+    .addStringOption((option) =>
+        option.setName("day").setDescription("Ngày cần tìm (tùy chọn, ví dụ: 23/12)").setRequired(false)
+    )
+    .toJSON();
 
 // Định nghĩa command /test-meal (chỉ root - Mai Xuân Hiếu - được dùng)
 const testMealCommand = new SlashCommandBuilder()
@@ -190,16 +207,10 @@ async function handleMealWeekButton(interaction, deps) {
 
 /**
  * Xử lý /test-meal: chạy thử luồng báo cơm 12h cho 1 người.
- * @param {object} deps - { resolveSheetName, readSheetGrid, adminDiscordId }
+ * @param {object} deps - { resolveSheetName, readSheetGrid }
  */
 async function handleTestMealCommand(interaction, deps) {
-    if (interaction.user.id !== deps.adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này (chỉ root mới được dùng).",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+    if (await denyUnlessRoot(interaction)) return;
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -243,9 +254,9 @@ async function handleTestMealCommand(interaction, deps) {
 }
 
 module.exports = {
-    testMealCommand,
-    handleAbcomCommand,
-    handleMealWeekButton,
-    handleTestMealCommand,
-    buildAbcomCard,
+    commands: [
+        { data: abcomCommand, execute: handleAbcomCommand },
+        { data: testMealCommand, execute: handleTestMealCommand },
+    ],
+    buttons: [{ customId: MEAL_WEEK_BUTTON_ID, execute: handleMealWeekButton }],
 };

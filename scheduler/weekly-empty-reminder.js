@@ -1,164 +1,90 @@
 const cron = require("node-cron");
-const fs = require("fs");
-const path = require("path");
+const { readCurrentSheet } = require("../utils/google-sheets");
+const { findNameInRows, findDateColumn, getMealAt, isEmptyMeal } = require("../utils/meal-sheet");
+const { loadRecipients } = require("../utils/users");
+const { addDays, formatDayMonth, getWeekRange } = require("../utils/workdays");
 
-// Đọc danh sách users nhận nhắc đặt cơm thứ 2. Tắt riêng cho ai thì đặt
+// Người nhận nhắc đặt cơm thứ 2. Tắt riêng cho ai thì đặt
 // "order_reminder": false (thiếu trường này thì vẫn nhắc)
-function loadUsersFromFile() {
-    try {
-        const usersFilePath = path.join(__dirname, "../data/users.json");
-        const usersData = JSON.parse(fs.readFileSync(usersFilePath, "utf8"));
-
-        return usersData.users.filter(
-            (user) =>
-                user.enabled === true &&
-                user.discordId !== null &&
-                user.order_reminder !== false
-        );
-    } catch (error) {
-        return [];
-    }
+function loadReminderUsers() {
+    return loadRecipients((user) => user.enabled === true && user.order_reminder !== false);
 }
 
-function formatDateDDMM(d) {
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    return `${day}/${month}`;
+// Thứ 2 -> Thứ 6 của tuần chứa `date`
+function getWorkWeekDates(date = new Date()) {
+    const { monday } = getWeekRange(date);
+    return [0, 1, 2, 3, 4].map((i) => addDays(monday, i));
 }
 
-// Lấy 5 ngày Thứ 2 -> Thứ 6 của tuần hiện tại, dạng DD/MM
-function getWeekdayDatesOfCurrentWeek() {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(new Date().setDate(diff));
+/**
+ * 1 user có bỏ trống cả tuần (T2-T6) không, tra trên bảng đã đọc sẵn.
+ * @returns {{ allEmpty: boolean, noColumns?: boolean, error?: string }}
+ */
+function checkUserWeekEmpty(rows, userName, weekDates) {
+    const found = findNameInRows(rows, userName);
+    if (!found.row) return { allEmpty: false, error: found.error || `Có nhiều dòng khớp tên "${userName}"` };
 
-    const dates = [];
-    for (let i = 0; i < 5; i++) {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        dates.push(formatDateDDMM(d));
-    }
-    return dates;
+    const columns = weekDates.map((date) => findDateColumn(rows, date)).filter((index) => index !== -1);
+    // Sheet không có cột ngày nào của tuần này -> không đủ dữ liệu để kết luận
+    if (columns.length === 0) return { allEmpty: false, noColumns: true };
+
+    return { allEmpty: columns.every((index) => isEmptyMeal(getMealAt(rows, found.row, index))) };
 }
 
-function isEmptyValue(value) {
-    const v = value?.toString().trim() || "";
-    return (
-        v === "" ||
-        v === "0" ||
-        v === "(trống)" ||
-        v === "null" ||
-        v === "undefined"
-    );
-}
+// 8h sáng Thứ 2: DM nhắc những ai chưa đăng ký cơm ngày nào trong tuần
+async function runWeeklyEmptyReminder(client) {
+    const users = loadReminderUsers();
+    if (users.length === 0) return;
 
-// Kiểm tra 1 user có bỏ trống cả tuần (T2-T6) không
-async function checkUserWeekEmpty(
-    sheetName,
-    userName,
-    findNameInColumn,
-    findDateInRow,
-    getCellValue
-) {
-    const nameResult = await findNameInColumn(sheetName, userName);
-    if (nameResult.error || !nameResult.row) {
-        return {
-            error: nameResult.error || `Không tìm thấy tên "${userName}"`,
-        };
+    const sheet = await readCurrentSheet();
+    if (sheet.error) {
+        console.error(`❌ Không đọc được sheet để check tuần trống: ${sheet.error}`);
+        return;
     }
 
-    const weekDates = getWeekdayDatesOfCurrentWeek();
-    let hasAnyColumn = false;
+    const weekDates = getWorkWeekDates();
+    const range = `${formatDayMonth(weekDates[0])} - ${formatDayMonth(weekDates[4])}`;
+    const sheetLink = `https://docs.google.com/spreadsheets/d/${process.env.SHEET_ID}/edit?gid=${process.env.G_SHEET_ID}`;
+    let reminded = 0;
 
-    for (const date of weekDates) {
-        const dateResult = await findDateInRow(sheetName, date);
-        if (dateResult.error) continue; // không có cột cho ngày này thì bỏ qua
+    for (const user of users) {
+        const result = checkUserWeekEmpty(sheet.rows, user.name, weekDates);
+        if (!result.allEmpty) continue;
 
-        hasAnyColumn = true;
-
-        const cellResult = await getCellValue(
-            sheetName,
-            dateResult.column,
-            nameResult.row
-        );
-        if (cellResult.error) continue;
-
-        if (!isEmptyValue(cellResult.value)) {
-            return { allEmpty: false };
-        }
-    }
-
-    // Không có cột ngày nào trong tuần được tìm thấy -> không đủ dữ liệu để kết luận
-    if (!hasAnyColumn) {
-        return { allEmpty: false, noColumns: true };
-    }
-
-    return { allEmpty: true, weekDates };
-}
-
-// Khởi tạo scheduler: 8h sáng Thứ 2 hàng tuần, nhắc user chưa đăng ký cơm cả tuần
-function startWeeklyEmptyReminderScheduler(
-    client,
-    resolveSheetName,
-    findNameInColumn,
-    findDateInRow,
-    getCellValue
-) {
-    const cronExpression = "0 8 * * 1"; // 8h00 Thứ 2 hàng tuần
-
-    cron.schedule(cronExpression, async () => {
-        const resolved = await resolveSheetName();
-        if (resolved.error) {
-            console.error(
-                `❌ Không xác định được sheet để check tuần trống: ${resolved.error}`
+        try {
+            const discordUser = await client.users.fetch(user.discordId);
+            await discordUser.send(
+                `🍽️ **Nhắc đặt cơm tuần này**\n\n` +
+                    `Chào ${user.name}, mình thấy bạn chưa đăng ký cơm trưa cho cả tuần này (${range}).\n` +
+                    `Vui lòng vào sheet đăng ký cơm trưa để điền món ăn nhé!\n` +
+                    `🔗 ${sheetLink}`
             );
-            return;
+            reminded++;
+        } catch (error) {
+            console.error(`❌ Không gửi được nhắc đặt cơm cho ${user.name}: ${error.message}`);
         }
 
-        const enabledUsers = loadUsersFromFile();
-        if (enabledUsers.length === 0) return;
+        // Delay 1 giây tránh rate limit
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
 
-        for (const user of enabledUsers) {
-            try {
-                const result = await checkUserWeekEmpty(
-                    resolved.sheetName,
-                    user.name,
-                    findNameInColumn,
-                    findDateInRow,
-                    getCellValue
-                );
+    console.log(`⏰ Nhắc đặt cơm tuần ${range}: đã nhắc ${reminded}/${users.length} người`);
+}
 
-                if (result.error || result.noColumns || !result.allEmpty) {
-                    continue;
-                }
-
-                try {
-                    const discordUser = await client.users.fetch(
-                        user.discordId
-                    );
-                    const sheetLink = `https://docs.google.com/spreadsheets/d/${process.env.SHEET_ID}/edit?gid=${process.env.G_SHEET_ID}`;
-                    await discordUser.send(
-                        `🍽️ **Nhắc đặt cơm tuần này**\n\n` +
-                            `Chào ${user.name}, mình thấy bạn chưa đăng ký cơm trưa cho cả tuần này (${result.weekDates[0]} - ${result.weekDates[4]
-                            }).\n` +
-                            `Vui lòng vào sheet đăng ký cơm trưa để điền món ăn nhé!\n` +
-                            `🔗 ${sheetLink}`
-                    );
-                } catch (error) {
-                    // Silent fail
-                }
-
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-            } catch (error) {
-                // Silent fail per user
-            }
+function startWeeklyEmptyReminderScheduler(client) {
+    // 8h00 Thứ 2 hàng tuần
+    cron.schedule("0 8 * * 1", async () => {
+        try {
+            await runWeeklyEmptyReminder(client);
+        } catch (error) {
+            console.error(`❌ Lỗi khi nhắc đặt cơm thứ 2: ${error.message}`);
         }
     });
 }
 
 module.exports = {
     startWeeklyEmptyReminderScheduler,
-    getWeekdayDatesOfCurrentWeek,
+    runWeeklyEmptyReminder,
     checkUserWeekEmpty,
+    getWorkWeekDates,
 };

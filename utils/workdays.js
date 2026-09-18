@@ -122,11 +122,18 @@ function isWorkingDay(date = new Date()) {
 }
 
 // Thứ 7 gần nhất tính từ `date` (chính nó nếu hôm nay là thứ 7)
+// Thứ 2 và Chủ nhật của tuần chứa `date` (tuần tính từ thứ 2)
+function getWeekRange(date = new Date()) {
+    const monday = addDays(startOfDay(date), -((date.getDay() + 6) % 7));
+    return { monday, sunday: addDays(monday, 6) };
+}
+
 function getUpcomingSaturday(date = new Date()) {
     return addDays(date, (6 - date.getDay() + 7) % 7);
 }
 
 module.exports = {
+    getWeekRange,
     MAKEUP_DAYS_FILE,
     WEEKDAY_SHORT,
     WEEKDAY_LONG,

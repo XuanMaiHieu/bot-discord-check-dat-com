@@ -1,5 +1,3 @@
-const fs = require("fs");
-const path = require("path");
 const {
     SlashCommandBuilder,
     PermissionFlagsBits,
@@ -12,6 +10,8 @@ const {
 } = require("discord.js");
 const { findNameInRows, normalizeName } = require("../utils/meal-sheet");
 const { cardPayload } = require("../utils/card-message");
+const { readUsers } = require("../utils/users");
+const { denyUnlessRoot } = require("../utils/admin");
 
 // Họ tên bắt đầu từ dòng 5 của sheet (dòng 1-4 là tiêu đề và ngày)
 const FIRST_NAME_ROW = 5;
@@ -32,11 +32,6 @@ const checkUsersCommand = new SlashCommandBuilder()
         option.setName("user").setDescription("Chỉ kiểm tra 1 người (bỏ trống = tất cả)").setRequired(false)
     )
     .toJSON();
-
-function loadAllUsers() {
-    const usersFilePath = path.join(__dirname, "../data/users.json");
-    return JSON.parse(fs.readFileSync(usersFilePath, "utf8")).users;
-}
 
 // Kiểm tra Discord cho 1 user mà không gửi tin: ID có thật, ở chung server với
 // bot, mở được kênh DM. Riêng việc người đó chặn DM thì chỉ biết khi gửi thật.
@@ -168,18 +163,12 @@ function buildReport({ results, missingFromSheet, sheetName, sheetError }) {
  * Xử lý /check-users: kiểm tra Discord + sheet cho từng user, không gửi tin.
  */
 async function handleCheckUsersCommand(interaction, deps) {
-    if (interaction.user.id !== deps.adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này (chỉ root mới được dùng).",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+    if (await denyUnlessRoot(interaction)) return;
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
-        const allUsers = loadAllUsers();
+        const allUsers = readUsers();
         const target = interaction.options.getUser("user");
         const users = target ? allUsers.filter((u) => u.discordId === target.id) : allUsers;
         if (target && users.length === 0) {
@@ -215,6 +204,5 @@ async function handleCheckUsersCommand(interaction, deps) {
 }
 
 module.exports = {
-    checkUsersCommand,
-    handleCheckUsersCommand,
+    commands: [{ data: checkUsersCommand, execute: handleCheckUsersCommand }],
 };

@@ -11,7 +11,7 @@ const { parseDayMonth, startOfDay } = require("./workdays");
 const NAME_COLUMN_INDEX = 2; // cột C
 const DATE_ROW_INDEX = 3; // dòng 4
 
-// Chuẩn hóa tên (bỏ dấu, lowercase, trim) - giống findNameInColumn trong bot.js
+// Chuẩn hóa tên (bỏ dấu, lowercase, trim)
 function normalizeName(name) {
     if (!name) return "";
     return name
@@ -24,7 +24,7 @@ function normalizeName(name) {
 }
 
 /**
- * Tìm tên trong cột C, cùng quy tắc với findNameInColumn:
+ * Tìm tên trong cột C:
  * ưu tiên khớp chính xác, sau đó khớp một phần.
  * Trả về { row, name } | { matches: [{ row, name }] } | { error }
  * (row đánh số từ 1 như trên sheet)

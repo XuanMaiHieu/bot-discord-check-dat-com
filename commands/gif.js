@@ -7,6 +7,7 @@ const {
     ApplicationIntegrationType,
 } = require("discord.js");
 const { fetchGif, getActiveProviderName } = require("../utils/gif");
+const { denyUnlessRoot } = require("../utils/admin");
 
 // Định nghĩa command /test-send-gif (chỉ root - Mai Xuân Hiếu - được dùng)
 const testSendGifCommand = new SlashCommandBuilder()
@@ -131,14 +132,8 @@ async function sendGifToUser(
 }
 
 // Hàm xử lý command /test-send-gif
-async function handleTestSendGifCommand(interaction, adminDiscordId) {
-    if (interaction.user.id !== adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này (chỉ root mới được dùng).",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+async function handleTestSendGifCommand(interaction) {
+    if (await denyUnlessRoot(interaction)) return;
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -208,14 +203,8 @@ async function handleTestSendGifCommand(interaction, adminDiscordId) {
 }
 
 // Hàm xử lý command /test-standup
-async function handleTestStandupCommand(interaction, adminDiscordId) {
-    if (interaction.user.id !== adminDiscordId) {
-        await interaction.reply({
-            content: "❌ Bạn không có quyền sử dụng lệnh này (chỉ root mới được dùng).",
-            flags: MessageFlags.Ephemeral,
-        });
-        return;
-    }
+async function handleTestStandupCommand(interaction) {
+    if (await denyUnlessRoot(interaction)) return;
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -261,10 +250,8 @@ async function handleTestStandupCommand(interaction, adminDiscordId) {
 }
 
 module.exports = {
-    testSendGifCommand,
-    handleTestSendGifCommand,
-    sendGifToUser,
-    buildGifEmbed,
-    testStandupCommand,
-    handleTestStandupCommand,
+    commands: [
+        { data: testSendGifCommand, execute: handleTestSendGifCommand },
+        { data: testStandupCommand, execute: handleTestStandupCommand },
+    ],
 };
