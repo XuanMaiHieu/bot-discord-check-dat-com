@@ -15,6 +15,7 @@ const MODULES = [
     require("./gold"), // /giavang, nút Làm mới
     require("./makeup-day"), // /lam-bu
     require("./gif"), // /test-send-gif, /test-standup
+    require("./clean-standup"), // /don-standup
     require("./check-users"), // /check-users
     require("./sheet-admin"), // /configsheet, /testsheetcheck
 ];

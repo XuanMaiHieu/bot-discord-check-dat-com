@@ -357,6 +357,8 @@ module.exports = {
     startStandupScheduler,
     runStandupNotification,
     loadStandupUsers,
+    loadLastMessages,
+    saveLastMessages,
     STANDUP_MESSAGE,
     STANDUP_GIF_URLS,
     GIF_HISTORY_FILE,
