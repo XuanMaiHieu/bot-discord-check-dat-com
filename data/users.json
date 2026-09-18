@@ -128,8 +128,8 @@
         },
         {
             "name": "Đỗ Huy Linh",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1195404586505207850",
+            "enabled": true,
             "football_notify": false,
             "order_reminder": false
         },

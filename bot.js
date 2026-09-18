@@ -40,6 +40,7 @@ const {
     handleTestMealCommand,
 } = require("./commands/meal");
 const { lamBuCommand, handleLamBuCommand } = require("./commands/makeup-day");
+const { checkUsersCommand, handleCheckUsersCommand } = require("./commands/check-users");
 const { MEAL_WEEK_BUTTON_ID } = require("./utils/meal-card");
 const {
     startDailyFoodScheduler,
@@ -148,6 +149,7 @@ client.once("ready", async () => {
             testMealCommand, // Thêm command /test-meal (root only)
             lamBuCommand, // Thêm command /lam-bu (admin only)
             testFootballCommand, // Thêm command /test-football (root only)
+            checkUsersCommand, // Thêm command /check-users (root only)
             new SlashCommandBuilder()
                 .setName("testsheetcheck")
                 .setDescription(
@@ -164,7 +166,7 @@ client.once("ready", async () => {
         });
 
         console.log(
-            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck, /test-send-gif, /test-standup, /test-meal, /lam-bu, /fbdate, /fbname, /test-football"
+            "✅ Đã đăng ký slash commands: /abcom, /abc, /help, /configsheet, /testsheetcheck, /test-send-gif, /test-standup, /test-meal, /lam-bu, /fbdate, /fbname, /test-football, /check-users"
         );
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
@@ -809,6 +811,8 @@ client.on("interactionCreate", async (interaction) => {
             await handleLamBuCommand(interaction, mealDeps);
         } else if (interaction.commandName === "test-football") {
             await handleTestFootballCommand(interaction, ADMIN_DISCORD_ID);
+        } else if (interaction.commandName === "check-users") {
+            await handleCheckUsersCommand(interaction, mealDeps);
         } else if (interaction.commandName === "configsheet") {
             if (interaction.user.id !== ADMIN_DISCORD_ID) {
                 await interaction.reply({
