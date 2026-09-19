@@ -3,13 +3,15 @@
  * Đọc cả bảng 1 lần rồi tra trong bộ nhớ, thay vì gọi API cho từng người -
  * Google Sheets giới hạn 60 lần đọc/phút.
  *
- * Bố cục sheet: cột C = họ tên, dòng 4 = ngày (DD/MM), các tuần cách nhau
+ * Bố cục sheet: cột C = họ tên, 1 dòng tiêu đề chứa ngày (DD/MM), các tuần cách nhau
  * bởi 1 cột trống, ô món ăn để trống hoặc "0" nghĩa là không đặt.
  */
 const { parseDayMonth, startOfDay } = require("./workdays");
 
 const NAME_COLUMN_INDEX = 2; // cột C
-const DATE_ROW_INDEX = 3; // dòng 4
+// HR hay chèn / xóa dòng ở phần tiêu đề nên không cố định dòng ngày,
+// mà tìm trong vài dòng đầu dòng có nhiều ô DD/MM nhất
+const DATE_ROW_SCAN_LIMIT = 10;
 
 // Chuẩn hóa tên (bỏ dấu, lowercase, trim)
 function normalizeName(name) {
@@ -57,9 +59,23 @@ function findNameInRows(rows, searchQuery) {
     return { error: `Không tìm thấy tên phù hợp với "${searchQuery}" trong cột C` };
 }
 
-// Các cột có ngày hợp lệ ở dòng 4, theo thứ tự trên sheet
+// Chỉ số (từ 0) của dòng chứa ngày, -1 nếu không tìm thấy
+function findDateRowIndex(rows) {
+    let bestIndex = -1;
+    let bestCount = 0;
+    rows.slice(0, DATE_ROW_SCAN_LIMIT).forEach((row, i) => {
+        const count = (row || []).filter((text) => parseDayMonth(text)).length;
+        if (count > bestCount) {
+            bestIndex = i;
+            bestCount = count;
+        }
+    });
+    return bestIndex;
+}
+
+// Các cột có ngày hợp lệ ở dòng ngày, theo thứ tự trên sheet
 function getDateColumns(rows, reference = new Date()) {
-    const header = rows[DATE_ROW_INDEX] || [];
+    const header = rows[findDateRowIndex(rows)] || [];
     const columns = [];
     header.forEach((text, columnIndex) => {
         const date = parseDayMonth(text, reference);
@@ -127,6 +143,7 @@ function columnLetter(index) {
 module.exports = {
     normalizeName,
     findNameInRows,
+    findDateRowIndex,
     getDateColumns,
     findDateColumn,
     getMealAt,

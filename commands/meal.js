@@ -99,7 +99,7 @@ async function buildAbcomCard(deps, name, day) {
         const date = parseDayMonth(day, today);
         const column = date ? findDateColumn(rows, date) : -1;
         if (column === -1) {
-            return { error: `Không tìm thấy ngày "${day}" trong dòng 4` };
+            return { error: `Không tìm thấy ngày "${day}" trên dòng ngày của sheet` };
         }
 
         if (!nameResult.matches) {

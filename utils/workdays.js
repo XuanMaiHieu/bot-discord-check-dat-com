@@ -35,7 +35,7 @@ function toDateKey(date) {
     return `${y}-${m}-${d}`;
 }
 
-// DD/MM như trên dòng 4 của sheet
+// DD/MM như trên dòng ngày của sheet
 function formatDayMonth(date) {
     const d = String(date.getDate()).padStart(2, "0");
     const m = String(date.getMonth() + 1).padStart(2, "0");

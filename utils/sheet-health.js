@@ -4,7 +4,7 @@
  */
 const { ADMIN_SHEET_NAME } = require("../config");
 const { readCurrentSheet } = require("./google-sheets");
-const { findNameInRows, findDateColumn } = require("./meal-sheet");
+const { findNameInRows, findDateColumn, findDateRowIndex } = require("./meal-sheet");
 const { formatDayMonth } = require("./workdays");
 
 // Tìm dòng của root trong cột C
@@ -15,18 +15,17 @@ function checkAdminRow(rows) {
     return { error: `Không tìm thấy "${ADMIN_SHEET_NAME}" trong sheet` };
 }
 
-// Dòng 4 phải có đúng ngày hôm nay: đây chính là điều kiện /abcom và tin báo cơm
-// dùng để tra cột. Dòng 4 là lịch theo tuần nên không thể chỉ so tháng của ngày
+// Dòng ngày phải có đúng ngày hôm nay: đây chính là điều kiện /abcom và tin báo cơm
+// dùng để tra cột. Dòng ngày là lịch theo tuần nên không thể chỉ so tháng của ngày
 // đầu tiên (tuần có thể bắt đầu từ tháng trước)
 function checkTodayColumn(rows, today = new Date()) {
     const label = formatDayMonth(today);
     if (findDateColumn(rows, today) !== -1) return { today: label };
 
-    const hasAnyDate = (rows[3] || []).some((cell) => cell && cell.toString().trim());
-    if (!hasAnyDate) return { error: "Không tìm thấy ngày nào trong dòng 4 của sheet" };
+    if (findDateRowIndex(rows) === -1) return { error: "Không tìm thấy ngày nào trên dòng ngày của sheet" };
     return {
         error:
-            `Không tìm thấy ngày hôm nay (${label}) trong dòng 4 của sheet. ` +
+            `Không tìm thấy ngày hôm nay (${label}) trên dòng ngày của sheet. ` +
             `Có thể sheet chưa được cập nhật cho tháng/tuần mới, kiểm tra lại G_SHEET_ID.`,
     };
 }
