@@ -1,4 +1,5 @@
 const fs = require("fs");
+const cron = require("node-cron");
 const path = require("path");
 const { fetchGif } = require("../utils/gif");
 const { buildStandupCard } = require("../utils/meal-card");
@@ -76,7 +77,8 @@ function recordGifSent(url, date = new Date()) {
 }
 
 // Tin nhắc đứng dậy gần nhất đã gửi cho từng người: { discordId: { channelId, messageId, sentAt } }.
-// Gửi tin mới thì xóa tin cũ, để DM mỗi người chỉ còn 1 tin (nhiều GIF trông rối mắt)
+// Gửi tin mới thì xóa tin cũ, để DM mỗi người chỉ còn 1 tin (nhiều GIF trông rối mắt);
+// tin quá STANDUP_DELETE_AFTER_MINUTES cũng tự bị xóa (deleteExpiredStandups)
 const LAST_MESSAGES_FILE = path.join(__dirname, "../data/standup-last-messages.json");
 
 function loadLastMessages() {
@@ -98,17 +100,70 @@ function saveLastMessages(lastMessages) {
     }
 }
 
-// Xóa tin nhắc đứng dậy cũ trong DM. Tin đã bị xóa rồi thì bỏ qua
+// Xóa tin nhắc đứng dậy cũ trong DM. Tin đã bị xóa rồi thì bỏ qua.
+// Trả về true nếu tin không còn nữa (xóa được hoặc đã mất từ trước)
 async function deletePreviousStandup(client, previous) {
     try {
         const channel = await client.channels.fetch(previous.channelId);
         await channel.messages.delete(previous.messageId);
+        return true;
     } catch (error) {
         // 10008 = Unknown Message, 10003 = Unknown Channel: tin / kênh không còn
-        if (error.code !== 10008 && error.code !== 10003) {
-            console.error(`⚠️ Không xóa được tin nhắc đứng dậy cũ: ${error.message}`);
-        }
+        if (error.code === 10008 || error.code === 10003) return true;
+        console.error(`⚠️ Không xóa được tin nhắc đứng dậy cũ: ${error.message}`);
+        return false;
     }
+}
+
+// Tin nhắc đứng dậy chỉ có ích lúc 12h, gửi xong N phút thì tự xóa cho DM gọn.
+// STANDUP_DELETE_AFTER_MINUTES=0 để tắt (khi đó tin chỉ bị xóa ở lần gửi sau)
+function getDeleteAfterMinutes() {
+    const n = parseInt(process.env.STANDUP_DELETE_AFTER_MINUTES, 10);
+    return Number.isInteger(n) && n >= 0 ? n : 60;
+}
+
+/**
+ * Xóa các tin nhắc đứng dậy đã gửi quá N phút. Chạy định kỳ (xem
+ * startStandupCleanupScheduler) nên bot restart giữa chừng cũng không sót tin.
+ */
+async function deleteExpiredStandups(client, now = new Date()) {
+    const minutes = getDeleteAfterMinutes();
+    if (minutes === 0) return 0;
+
+    const cutoff = now.getTime() - minutes * 60 * 1000;
+    const expired = Object.entries(loadLastMessages()).filter(([, entry]) => {
+        const sentAt = new Date(entry?.sentAt).getTime();
+        return !Number.isNaN(sentAt) && sentAt <= cutoff;
+    });
+    if (expired.length === 0) return 0;
+
+    const deleted = [];
+    for (const [discordId, entry] of expired) {
+        if (await deletePreviousStandup(client, entry)) deleted.push([discordId, entry.messageId]);
+        await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+
+    // Đọc lại file trước khi ghi: trong lúc xóa có thể vừa gửi tin mới cho ai đó,
+    // chỉ bỏ những mục vẫn đúng là tin vừa xóa
+    const lastMessages = loadLastMessages();
+    for (const [discordId, messageId] of deleted) {
+        if (lastMessages[discordId]?.messageId === messageId) delete lastMessages[discordId];
+    }
+    saveLastMessages(lastMessages);
+
+    console.log(`🧹 Đã tự xóa ${deleted.length}/${expired.length} tin nhắc đứng dậy quá ${minutes} phút`);
+    return deleted.length;
+}
+
+// Cứ 5 phút quét 1 lần, nên tin bị xóa sau N đến N+5 phút
+function startStandupCleanupScheduler(client) {
+    cron.schedule("*/5 * * * *", async () => {
+        try {
+            await deleteExpiredStandups(client);
+        } catch (error) {
+            console.error(`❌ Lỗi khi tự xóa tin nhắc đứng dậy: ${error.message}`);
+        }
+    });
 }
 
 // Số ngày lịch (theo giờ máy, TZ=Asia/Ho_Chi_Minh) giữa 2 thời điểm, bỏ qua giờ phút
@@ -329,6 +384,8 @@ async function runStandupNotification(client, { targetUserIds = null, onlyUserId
 
 module.exports = {
     runStandupNotification,
+    deleteExpiredStandups,
+    startStandupCleanupScheduler,
     loadStandupUsers,
     loadLastMessages,
     saveLastMessages,

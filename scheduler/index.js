@@ -3,6 +3,7 @@ const { startFootballScheduler } = require("./football-notification");
 const { startGoldHealthCheckScheduler } = require("./gold-health-check");
 const { startSheetHealthCheckScheduler } = require("./sheet-health-check");
 const { startWeeklyEmptyReminderScheduler } = require("./weekly-empty-reminder");
+const { startStandupCleanupScheduler } = require("./standup-notification");
 
 /**
  * Bật mọi lịch chạy tự động (giờ theo TZ, xem ecosystem.config.js):
@@ -12,6 +13,8 @@ const { startWeeklyEmptyReminderScheduler } = require("./weekly-empty-reminder")
  *   10:00 thứ 2, thứ 6   lịch bóng đá trong tuần
  *   12:00 ngày làm việc  thẻ báo cơm, 30 giây sau nhắc đứng dậy cho những người
  *                        đã nhận thẻ báo cơm (xem runLunchNotifications)
+ *   mỗi 5 phút           xóa tin nhắc đứng dậy đã gửi quá STANDUP_DELETE_AFTER_MINUTES
+ *                        (mặc định 60 phút)
  */
 function startSchedulers(client, deps) {
     startDailyFoodScheduler(client, deps);
@@ -19,6 +22,7 @@ function startSchedulers(client, deps) {
     startGoldHealthCheckScheduler(client);
     startSheetHealthCheckScheduler(client);
     startWeeklyEmptyReminderScheduler(client);
+    startStandupCleanupScheduler(client);
 }
 
 module.exports = { startSchedulers };
