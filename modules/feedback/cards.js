@@ -69,7 +69,6 @@ function buildInviteCard(campaign, participant) {
 
     if (campaign.test) text(container, INVITE.testBadge);
     text(container, INVITE.title);
-    if (INVITE.greeting) text(container, INVITE.greeting);
     text(container, INVITE.intro);
     divider(container);
 
@@ -209,6 +208,11 @@ function buildThanksCard({ gifUrl, mealWeekButtonId, qrFileName }) {
         container.addMediaGalleryComponents((g) =>
             g.addItems((item) => item.setURL(`attachment://${qrFileName}`).setDescription("QR"))
         );
+    }
+
+    if (THANKS.greeting) {
+        divider(container);
+        text(container, THANKS.greeting);
     }
     return container;
 }
