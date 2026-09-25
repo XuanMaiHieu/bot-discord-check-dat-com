@@ -43,6 +43,11 @@ function divider(container) {
     container.addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 }
 
+// Khoảng trống lớn không kẻ vạch, để tách các khối cho thoáng
+function gap(container) {
+    container.addSeparatorComponents((s) => s.setDivider(false).setSpacing(SeparatorSpacingSize.Large));
+}
+
 function text(container, content) {
     container.addTextDisplayComponents((t) => t.setContent(content));
 }
@@ -84,7 +89,11 @@ function buildInviteCard(campaign, participant) {
             )
         )
     );
-    if (participant.rating) text(container, `### ${RATINGS[participant.rating].reply}`);
+    if (participant.rating) {
+        gap(container);
+        text(container, `### ${RATINGS[participant.rating].reply}`);
+        gap(container);
+    }
 
     text(container, INVITE.featuresQuestion);
     container.addActionRowComponents((row) =>
