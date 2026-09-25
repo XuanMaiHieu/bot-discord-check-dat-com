@@ -6,7 +6,8 @@
     "ignore": [
         "node_modules",
         "*.log",
-        ".env"
+        ".env",
+        "data/**"
     ],
     "ext": "js,json",
     "exec": "node bot.js",
