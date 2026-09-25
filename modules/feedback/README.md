@@ -22,7 +22,7 @@ Code nằm riêng trong thư mục này, chạy chung process với bot qua ổ 
 | `/feedback-test` | Gửi thẻ mời thử vào DM root. Dữ liệu test lưu riêng, chạy lại là reset. Sau đó `/test-meal` hiện dòng nhắc nợ, mỗi lần chạy hiện câu kế tiếp |
 | `/feedback-moi [gui_that]` | Mặc định chỉ xem trước danh sách, `gui_that: True` mới gửi thật. Chỉ gửi cho người chưa được mời trong đợt đang mở, chưa có đợt thì tự mở đợt mới (mã theo tháng, vd `2026-09`) |
 | `/feedback-tong-hop [test]` | Điểm TB, phân bố điểm, tính năng hay xem, số lần "Để sau", tổng pháo tay, góp ý theo Người #N |
-| `/feedback-chi-tiet [dot] [test]` | Bảng đầy đủ **có tên thật**: điểm, số lần "Để sau", số lần bị nhắc, tính năng hay xem, toàn bộ góp ý, điểm TB và NPS. Kèm file CSV (mỗi lần góp ý 1 dòng) để mở bằng Excel |
+| `/feedback-chi-tiet [dot] [test]` | Gửi vào DM root 1 bộ tin **có tên thật**, không cắt bớt: tổng quan (điểm TB, NPS, phân bố điểm, hay xem, pháo tay, ai chưa chấm), bảng điểm, toàn bộ góp ý từng người, file CSV (mỗi lần góp ý 1 dòng) để mở bằng Excel |
 | `/feedback-dong` | Đóng đợt đang mở |
 
 ## Env

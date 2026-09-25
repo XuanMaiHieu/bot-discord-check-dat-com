@@ -56,6 +56,12 @@ function ratingLabel(rating) {
     return `${RATINGS[rating].emoji} ${rating}`;
 }
 
+// Thanh ngang cho biểu đồ chữ: "████░░░░░░░░"
+function bar(count, max, width = 12) {
+    const filled = max ? Math.round((count / max) * width) : 0;
+    return "█".repeat(filled) + "░".repeat(width - filled);
+}
+
 function featureLabels(values) {
     return FEATURES.filter((f) => values.includes(f.value)).map((f) => `${f.emoji} ${f.label}`);
 }
@@ -294,6 +300,7 @@ module.exports = {
     parseCustomId,
     ratingLabel,
     featureLabels,
+    bar,
     buildInviteCard,
     buildFeedbackModal,
     buildLaunchFrame,

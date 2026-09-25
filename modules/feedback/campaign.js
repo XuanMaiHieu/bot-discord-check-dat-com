@@ -3,7 +3,7 @@
  *   /feedback-test       gửi thẻ mời thử vào DM của root (dữ liệu test riêng)
  *   /feedback-moi        gửi thẻ mời cho mọi người (mặc định chỉ xem trước)
  *   /feedback-tong-hop   thống kê đợt hiện tại / gần nhất (ẩn danh)
- *   /feedback-chi-tiet   bảng đầy đủ có tên, điểm, góp ý + file CSV
+ *   /feedback-chi-tiet   gửi vào DM bộ tin thống kê đầy đủ có tên + file CSV
  *   /feedback-dong       đóng đợt đang mở
  */
 const {
@@ -17,10 +17,11 @@ const {
 } = require("discord.js");
 const store = require("./store");
 const { RATINGS, FEATURES } = require("./texts");
-const { COLORS, buildInviteCard, ratingLabel } = require("./cards");
-const { buildDetailReport } = require("./report");
+const { COLORS, buildInviteCard, ratingLabel, bar } = require("./cards");
+const { buildDetailMessages } = require("./report");
 
 const SEND_DELAY_MS = 1000; // giãn cách giữa các DM, tránh rate limit
+const DETAIL_SEND_DELAY_MS = 500; // giữa các tin thống kê gửi cho root, giữ đúng thứ tự
 const MAX_REPLY_LENGTH = 1900;
 const MAX_CARD_TEXT = 3500; // Discord giới hạn 4000 ký tự chữ / thẻ
 
@@ -51,7 +52,7 @@ const summaryCommand = rootCommand("feedback-tong-hop", "[Root] Thống kê feed
     )
     .toJSON();
 
-const detailCommand = rootCommand("feedback-chi-tiet", "[Root] Bảng feedback đầy đủ: tên, điểm, góp ý (kèm file CSV)")
+const detailCommand = rootCommand("feedback-chi-tiet", "[Root] Gửi vào DM thống kê feedback đầy đủ: tên, điểm, góp ý, file CSV")
     .addStringOption((option) =>
         option.setName("dot").setDescription("Mã đợt, vd 2026-09. Bỏ trống = đợt đang mở / gần nhất").setRequired(false)
     )
@@ -132,11 +133,6 @@ async function handleInvite(interaction, ctx) {
     await interaction.editReply(
         clip([`📣 Đợt **${campaign.id}**: đã gửi ${sent}/${recipients.length} thẻ mời`, "", ...details].join("\n"), MAX_REPLY_LENGTH)
     );
-}
-
-function bar(count, max, width = 12) {
-    const filled = max ? Math.round((count / max) * width) : 0;
-    return "█".repeat(filled) + "░".repeat(width - filled);
 }
 
 function buildSummaryCard(campaign) {
@@ -231,8 +227,17 @@ async function handleDetail(interaction, ctx) {
 
     // Lấy tên Discord của người không có trong users.json có thể mất vài giây
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { card, files } = await buildDetailReport(ctx, campaign);
-    await interaction.editReply(ctx.cardPayload(card, { files }));
+    const messages = await buildDetailMessages(ctx, campaign);
+    for (let i = 0; i < messages.length; i++) {
+        const { card, files } = messages[i];
+        const result = await ctx.sendCardToUser(interaction.user.id, card, { files });
+        if (!result.success) {
+            await interaction.editReply(`❌ Gửi được ${i}/${messages.length} tin vào DM thì lỗi: ${result.error}`);
+            return;
+        }
+        await sleep(DETAIL_SEND_DELAY_MS);
+    }
+    await interaction.editReply(`📬 Đã gửi ${messages.length} tin thống kê đợt **${campaign.id}** vào DM của bạn.`);
 }
 
 async function handleClose(interaction, ctx) {
