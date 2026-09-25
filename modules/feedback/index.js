@@ -45,7 +45,7 @@ function startClap(ctx) {
     const { renderClapQr } = require("./clap/qr");
     const { url } = startClapServer(ctx, { port, publicUrl });
     try {
-        setQrPng(renderClapQr(url, ctx.fontsDir));
+        setQrPng(renderClapQr(url));
     } catch (error) {
         console.error("❌ Không vẽ được QR pháo tay, thẻ cảm ơn sẽ không có QR:", error);
     }

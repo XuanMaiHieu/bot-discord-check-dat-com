@@ -24,7 +24,6 @@ async function replyWithCard(interaction, buildCard, errorPrefix) {
 }
 
 const DATA_ROOT = path.join(__dirname, "../data");
-const FONTS_DIR = path.join(__dirname, "../assets/fonts");
 
 function createModuleContext(client, deps) {
     return {
@@ -63,9 +62,6 @@ function createModuleContext(client, deps) {
                     "Không lấy được lịch thi đấu từ ESPN"
                 ),
         },
-
-        // Font Be Vietnam Pro của bot (BeVietnamPro-<Medium|SemiBold|Bold|ExtraBold>.ttf)
-        fontsDir: FONTS_DIR,
 
         // Thư mục lưu dữ liệu riêng của module: data/<name>/ (data/ nằm trong
         // .gitignore nên git pull không ghi đè)

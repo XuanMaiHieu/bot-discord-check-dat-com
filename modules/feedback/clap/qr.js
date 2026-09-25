@@ -1,34 +1,23 @@
 /**
- * Ảnh QR "donate" pháo tay, nhại QR chuyển khoản ngân hàng.
+ * Ảnh QR "donate" trên thẻ cảm ơn. Cố ý không có chữ nào: người dùng không biết
+ * quét ra chuyển tiền hay vỗ tay, quét rồi mới biết.
  * Chỉ vẽ 1 lần mỗi lần bot chạy rồi giữ trong bộ nhớ (thư viện vẽ giữ RAM sau
  * mỗi lần vẽ, xem utils/poster-renderer.js, nên không vẽ lại liên tục).
  */
-const path = require("path");
 const QRCode = require("qrcode");
-const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
+const { createCanvas } = require("@napi-rs/canvas");
 
-const WIDTH = 720;
-const HEIGHT = 1020;
+const SIZE = 640;
+const CARD_MARGIN = 56;
+const QR_SIZE = 420;
 
 const COLORS = {
     bgTop: "#ff8a3d",
     bgBottom: "#ff3d7f",
     card: "#ffffff",
     ink: "#1f2937",
-    muted: "#6b7280",
-    accent: "#f97316",
     accentDark: "#c2410c", // cam đậm, đủ tương phản cho máy quét
-    line: "#fde2cf",
 };
-
-let fontsReady = false;
-function registerFonts(fontsDir) {
-    if (fontsReady) return;
-    for (const weight of ["Medium", "Bold", "ExtraBold"]) {
-        GlobalFonts.registerFromPath(path.join(fontsDir, `BeVietnamPro-${weight}.ttf`), `Clap ${weight}`);
-    }
-    fontsReady = true;
-}
 
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -56,10 +45,10 @@ function drawQr(ctx, url, x, y, size) {
         }
     }
 
+    // Ô định vị phải đậm màu, màu cam nhạt làm máy quét đọc không ra
     for (const [r, c] of [[0, 0], [0, count - 7], [count - 7, 0]]) {
         const fx = x + c * cell;
         const fy = y + r * cell;
-        // Ô định vị phải đậm màu, màu cam nhạt làm máy quét đọc không ra
         ctx.fillStyle = COLORS.ink;
         roundRect(ctx, fx, fy, cell * 7, cell * 7, cell * 1.6);
         ctx.fill();
@@ -72,67 +61,26 @@ function drawQr(ctx, url, x, y, size) {
     }
 }
 
-function drawRow(ctx, y, label, value) {
-    ctx.textAlign = "left";
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "26px 'Clap Medium'";
-    ctx.fillText(label, 110, y);
-    ctx.textAlign = "right";
-    ctx.fillStyle = COLORS.ink;
-    ctx.font = "28px 'Clap Bold'";
-    ctx.fillText(value, WIDTH - 110, y);
-}
-
 /**
  * @param {string} url - link trang pháo tay
- * @param {string} fontsDir
  * @returns {Buffer} PNG
  */
-function renderClapQr(url, fontsDir) {
-    registerFonts(fontsDir);
-    const canvas = createCanvas(WIDTH, HEIGHT);
+function renderClapQr(url) {
+    const canvas = createCanvas(SIZE, SIZE);
     const ctx = canvas.getContext("2d");
 
-    const bg = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+    const bg = ctx.createLinearGradient(0, 0, SIZE, SIZE);
     bg.addColorStop(0, COLORS.bgTop);
     bg.addColorStop(1, COLORS.bgBottom);
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // Tiêu đề trên nền cam
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "44px 'Clap ExtraBold'";
-    ctx.fillText("PHÁO TAY BANKING", WIDTH / 2, 92);
-    ctx.font = "24px 'Clap Medium'";
-    ctx.fillText("Chuyển khoản bằng… tiếng vỗ tay", WIDTH / 2, 134);
-
-    // Thẻ trắng
+    // Thẻ trắng, lề quanh QR đủ rộng cho máy quét
     ctx.fillStyle = COLORS.card;
-    roundRect(ctx, 60, 170, WIDTH - 120, HEIGHT - 230, 36);
+    roundRect(ctx, CARD_MARGIN, CARD_MARGIN, SIZE - CARD_MARGIN * 2, SIZE - CARD_MARGIN * 2, 36);
     ctx.fill();
 
-    const qrSize = 420;
-    drawQr(ctx, url, (WIDTH - qrSize) / 2, 250, qrSize);
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = COLORS.accent;
-    ctx.font = "26px 'Clap Bold'";
-    ctx.fillText("Quét để vỗ tay cho admin", WIDTH / 2, 725);
-
-    ctx.strokeStyle = COLORS.line;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.moveTo(100, 760);
-    ctx.lineTo(WIDTH - 100, 760);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    drawRow(ctx, 815, "Người nhận", "MAI XUÂN HIẾU");
-    drawRow(ctx, 868, "Số tiền", "1 tràng pháo tay");
-    drawRow(ctx, 921, "Nội dung", "bot xịn quá");
-
+    drawQr(ctx, url, (SIZE - QR_SIZE) / 2, (SIZE - QR_SIZE) / 2, QR_SIZE);
     return canvas.toBuffer("image/png");
 }
 

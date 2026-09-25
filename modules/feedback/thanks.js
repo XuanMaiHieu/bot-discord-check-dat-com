@@ -8,7 +8,7 @@ const { buildLaunchFrame, buildThanksCard } = require("./cards");
 
 // Discord cho sửa tin ~5 lần / 5 giây, 3 khung cách nhau 0.9s là an toàn
 const FRAME_DELAY_MS = 900;
-const QR_FILE_NAME = "phao-tay.png";
+const QR_FILE_NAME = "qr.png"; // tên trung tính, bấm xem ảnh cũng không lộ
 
 // Ảnh QR (Buffer) do index.js đặt khi web pháo tay chạy; null = không có phần donate
 let qrPng = null;

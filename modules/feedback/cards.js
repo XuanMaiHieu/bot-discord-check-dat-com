@@ -84,7 +84,7 @@ function buildInviteCard(campaign, participant) {
             )
         )
     );
-    if (participant.rating) text(container, `> ${RATINGS[participant.rating].reply}`);
+    if (participant.rating) text(container, `### ${RATINGS[participant.rating].reply}`);
 
     text(container, INVITE.featuresQuestion);
     container.addActionRowComponents((row) =>
@@ -206,7 +206,7 @@ function buildThanksCard({ gifUrl, mealWeekButtonId, qrFileName }) {
         divider(container);
         text(container, THANKS.donate);
         container.addMediaGalleryComponents((g) =>
-            g.addItems((item) => item.setURL(`attachment://${qrFileName}`).setDescription("QR pháo tay"))
+            g.addItems((item) => item.setURL(`attachment://${qrFileName}`).setDescription("QR"))
         );
     }
     return container;
