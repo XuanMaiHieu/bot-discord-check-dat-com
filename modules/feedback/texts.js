@@ -2,6 +2,8 @@
 
 const INVITE = {
     title: "## 👋 Yoh! what's up? Hôm nay bro thế nào?",
+    // Câu chúc theo dịp, hết dịp thì để "" là ẩn
+    greeting: "🥮🏮 Chúc quý user Tết Trung thu vui vẻ, bánh nướng bánh dẻo đầy đủ, feedback cũng đầy đủ luôn nha!",
     intro: 'Sau gần hoặc hơn 1 tuần quý user mình sử dụng bot, hãy gửi tới admin những phản hồi "TÍCH CỰC" về bot nhé!',
     ratingQuestion: "**Bạn chấm bot mấy điểm?**",
     featuresQuestion: "**Bạn hay xem gì nhất?**",

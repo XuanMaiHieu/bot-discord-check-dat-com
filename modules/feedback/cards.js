@@ -69,6 +69,7 @@ function buildInviteCard(campaign, participant) {
 
     if (campaign.test) text(container, INVITE.testBadge);
     text(container, INVITE.title);
+    if (INVITE.greeting) text(container, INVITE.greeting);
     text(container, INVITE.intro);
     divider(container);
 
