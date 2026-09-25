@@ -27,6 +27,23 @@ async function getWeeklyMatches(date = new Date()) {
 }
 
 /**
+ * Thẻ lịch tuần này của nhóm đội theo dõi (tin tự động, nút "Xem ngay" của module).
+ * Ném lỗi nếu ESPN lỗi.
+ * @returns {Promise<{ card, matchCount: number }>}
+ */
+async function buildWeeklyFootballCard(client) {
+    const { week, matches } = await getWeeklyMatches();
+    const card = buildWeekCard({
+        title: `🗓️ Lịch tuần ${formatDayMonth(week.monday)} – ${formatDayMonth(week.sunday)}`,
+        subtitle: "Top 6 + Aston Villa",
+        matches,
+        emptyText: "Tuần này các đội theo dõi không có trận nào.",
+        emojis: await getTeamEmojis(client, teamsOfMatches(matches)),
+    });
+    return { card, matchCount: matches.length };
+}
+
+/**
  * Gửi tin lịch thi đấu trong tuần của nhóm đội theo dõi.
  * @param {object} client - Discord client
  * @param {object} options
@@ -45,30 +62,20 @@ async function runFootballNotification(client, { targetUserIds = null } = {}) {
         return report;
     }
 
-    let week;
-    let matches;
+    let card;
     try {
-        ({ week, matches } = await getWeeklyMatches());
+        ({ card, matchCount: report.matchCount } = await buildWeeklyFootballCard(client));
     } catch (error) {
         report.error = `Không lấy được lịch thi đấu từ ESPN: ${error.message}`;
         console.error(`❌ ${report.error}`);
         return report;
     }
-    report.matchCount = matches.length;
 
     // Cron thật: tuần không có trận thì không gửi. Test vẫn gửi để xem thẻ trống
-    if (matches.length === 0 && !isTest) {
+    if (report.matchCount === 0 && !isTest) {
         console.log("Không có trận đấu nào của Top 6 + Aston Villa trong tuần này.");
         return report;
     }
-
-    const card = buildWeekCard({
-        title: `🗓️ Lịch tuần ${formatDayMonth(week.monday)} – ${formatDayMonth(week.sunday)}`,
-        subtitle: "Top 6 + Aston Villa",
-        matches,
-        emptyText: "Tuần này các đội theo dõi không có trận nào.",
-        emojis: await getTeamEmojis(client, teamsOfMatches(matches)),
-    });
 
     for (const user of recipients) {
         const result = await sendCardToUser(client, user.discordId, card);
@@ -124,5 +131,6 @@ function startFootballScheduler(client) {
 module.exports = {
     startFootballScheduler,
     runFootballNotification,
+    buildWeeklyFootballCard,
     getWeeklyMatches, // Export để test nếu cần
 };

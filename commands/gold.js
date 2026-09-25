@@ -82,5 +82,6 @@ async function handleGoldRefreshButton(interaction) {
 
 module.exports = {
     commands: [{ data: giavangCommand, execute: handleGiavangCommand }],
+    buildTodayCard,
     buttons: [{ customId: GOLD_REFRESH_BUTTON_ID, execute: handleGoldRefreshButton }],
 };
