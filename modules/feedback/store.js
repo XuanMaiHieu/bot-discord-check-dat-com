@@ -78,6 +78,10 @@ function getCampaign(id) {
     return load().campaigns[id] || null;
 }
 
+function listCampaignIds() {
+    return Object.keys(load().campaigns);
+}
+
 function getCurrentCampaign() {
     const { currentCampaignId } = load();
     return currentCampaignId ? getCampaign(currentCampaignId) : null;
@@ -165,6 +169,7 @@ module.exports = {
     TEST_CAMPAIGN_ID,
     init,
     getCampaign,
+    listCampaignIds,
     getCurrentCampaign,
     getLatestCampaign,
     openCampaign,

@@ -13,7 +13,7 @@ Code nằm riêng trong thư mục này, chạy chung process với bot qua ổ 
 4. Chưa chấm thì thẻ báo cơm 12h có dòng nhắc nợ, bắt đầu từ ngày sau ngày mời, tối đa 5 lần (câu cuối: "bot bỏ cuộc").
 5. `/feedback-dong` đóng đợt: hết nhắc, nút trên thẻ cũ trả lời "đợt đã đóng".
 
-**Ẩn danh:** mọi tin báo và thống kê cho root chỉ ghi "Người #N". Số N được cấp theo thứ tự phản hồi. Bot vẫn lưu Discord ID, nhưng chỉ để biết ai đã xong và dừng nhắc.
+**Ẩn danh:** tin báo tự động và `/feedback-tong-hop` chỉ ghi "Người #N". Số N được cấp theo thứ tự phản hồi. Riêng `/feedback-chi-tiet` hiện tên thật (chỉ root, trả lời ẩn).
 
 ## Lệnh (chỉ root)
 
@@ -22,6 +22,7 @@ Code nằm riêng trong thư mục này, chạy chung process với bot qua ổ 
 | `/feedback-test` | Gửi thẻ mời thử vào DM root. Dữ liệu test lưu riêng, chạy lại là reset. Sau đó `/test-meal` hiện dòng nhắc nợ, mỗi lần chạy hiện câu kế tiếp |
 | `/feedback-moi [gui_that]` | Mặc định chỉ xem trước danh sách, `gui_that: True` mới gửi thật. Chỉ gửi cho người chưa được mời trong đợt đang mở, chưa có đợt thì tự mở đợt mới (mã theo tháng, vd `2026-09`) |
 | `/feedback-tong-hop [test]` | Điểm TB, phân bố điểm, tính năng hay xem, số lần "Để sau", tổng pháo tay, góp ý theo Người #N |
+| `/feedback-chi-tiet [dot] [test]` | Bảng đầy đủ **có tên thật**: điểm, số lần "Để sau", số lần bị nhắc, tính năng hay xem, toàn bộ góp ý, điểm TB và NPS. Kèm file CSV (mỗi lần góp ý 1 dòng) để mở bằng Excel |
 | `/feedback-dong` | Đóng đợt đang mở |
 
 ## Env

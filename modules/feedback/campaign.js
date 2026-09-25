@@ -3,6 +3,7 @@
  *   /feedback-test       gửi thẻ mời thử vào DM của root (dữ liệu test riêng)
  *   /feedback-moi        gửi thẻ mời cho mọi người (mặc định chỉ xem trước)
  *   /feedback-tong-hop   thống kê đợt hiện tại / gần nhất (ẩn danh)
+ *   /feedback-chi-tiet   bảng đầy đủ có tên, điểm, góp ý + file CSV
  *   /feedback-dong       đóng đợt đang mở
  */
 const {
@@ -17,6 +18,7 @@ const {
 const store = require("./store");
 const { RATINGS, FEATURES } = require("./texts");
 const { COLORS, buildInviteCard, ratingLabel } = require("./cards");
+const { buildDetailReport } = require("./report");
 
 const SEND_DELAY_MS = 1000; // giãn cách giữa các DM, tránh rate limit
 const MAX_REPLY_LENGTH = 1900;
@@ -44,6 +46,15 @@ const inviteCommand = rootCommand("feedback-moi", "[Root] Gửi thẻ mời feed
     .toJSON();
 
 const summaryCommand = rootCommand("feedback-tong-hop", "[Root] Thống kê feedback (ẩn danh)")
+    .addBooleanOption((option) =>
+        option.setName("test").setDescription("TRUE = xem dữ liệu của /feedback-test").setRequired(false)
+    )
+    .toJSON();
+
+const detailCommand = rootCommand("feedback-chi-tiet", "[Root] Bảng feedback đầy đủ: tên, điểm, góp ý (kèm file CSV)")
+    .addStringOption((option) =>
+        option.setName("dot").setDescription("Mã đợt, vd 2026-09. Bỏ trống = đợt đang mở / gần nhất").setRequired(false)
+    )
     .addBooleanOption((option) =>
         option.setName("test").setDescription("TRUE = xem dữ liệu của /feedback-test").setRequired(false)
     )
@@ -196,6 +207,34 @@ async function handleSummary(interaction, ctx) {
     await interaction.reply(ctx.cardPayload(buildSummaryCard(campaign), { ephemeral: true }));
 }
 
+async function handleDetail(interaction, ctx) {
+    if (await ctx.denyUnlessRoot(interaction)) return;
+    const campaignId = interaction.options.getString("dot")?.trim();
+    const wantTest = interaction.options.getBoolean("test") === true;
+    const campaign = wantTest
+        ? store.getCampaign(store.TEST_CAMPAIGN_ID)
+        : campaignId
+          ? store.getCampaign(campaignId)
+          : store.getCurrentCampaign() || store.getLatestCampaign();
+    if (!campaign) {
+        const known = store.listCampaignIds().filter((id) => id !== store.TEST_CAMPAIGN_ID);
+        await interaction.reply({
+            content: wantTest
+                ? "Chưa có dữ liệu test, chạy `/feedback-test` trước."
+                : campaignId
+                  ? `Không có đợt **${campaignId}**. Các đợt đã có: ${known.join(", ") || "chưa có"}`
+                  : "Chưa có đợt feedback nào.",
+            flags: MessageFlags.Ephemeral,
+        });
+        return;
+    }
+
+    // Lấy tên Discord của người không có trong users.json có thể mất vài giây
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { card, files } = await buildDetailReport(ctx, campaign);
+    await interaction.editReply(ctx.cardPayload(card, { files }));
+}
+
 async function handleClose(interaction, ctx) {
     if (await ctx.denyUnlessRoot(interaction)) return;
     const campaign = store.closeCurrentCampaign();
@@ -212,6 +251,7 @@ module.exports = {
         { data: testCommand, execute: handleTest },
         { data: inviteCommand, execute: handleInvite },
         { data: summaryCommand, execute: handleSummary },
+        { data: detailCommand, execute: handleDetail },
         { data: closeCommand, execute: handleClose },
     ],
 };
