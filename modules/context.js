@@ -16,8 +16,8 @@ const { MEAL_WEEK_BUTTON_ID } = require("../utils/meal-card");
 async function replyWithCard(interaction, buildCard, errorPrefix) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-        const { card, error } = await buildCard();
-        await interaction.editReply(card ? cardPayload(card) : `❌ ${error}`);
+        const { card, files = [], error } = await buildCard();
+        await interaction.editReply(card ? cardPayload(card, { files }) : `❌ ${error}`);
     } catch (error) {
         await interaction.editReply(`❌ ${errorPrefix}: ${error.message}`);
     }

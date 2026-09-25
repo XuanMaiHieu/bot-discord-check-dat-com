@@ -3,6 +3,15 @@ const { getFuelPrices } = require("../utils/fuel-price");
 const { buildFuelCard, FUEL_NOTIFY_BUTTON_ID, FUEL_NOTIFY_ALERT_BUTTON_ID } = require("../utils/fuel-card");
 const { cardPayload } = require("../utils/card-message");
 const { isFuelSubscriber, setFuelSubscriber } = require("../utils/fuel-subscribers");
+const { renderFuelImage, imageAttachment } = require("../utils/price-image");
+
+const IMAGE_FILE_NAME = "gia-xang.png";
+
+// Thẻ giá xăng kèm ảnh bảng giá (vẽ lỗi thì thẻ chữ)
+async function buildCardWithImage(report, { subscribed, alert = false }) {
+    const { imageFileName, files } = imageAttachment(await renderFuelImage(report, { alert }), IMAGE_FILE_NAME);
+    return { card: buildFuelCard(report, { subscribed, alert, imageFileName }), files };
+}
 
 const giaxangCommand = new SlashCommandBuilder()
     .setName("giaxang")
@@ -12,7 +21,7 @@ const giaxangCommand = new SlashCommandBuilder()
 // Thẻ giá hiện tại cho người bấm / gọi lệnh (dùng cả cho nút "Xem ngay" của module)
 async function buildFuelCardFor(interaction) {
     const report = await getFuelPrices();
-    return { card: buildFuelCard(report, { subscribed: isFuelSubscriber(interaction.user.id) }) };
+    return buildCardWithImage(report, { subscribed: isFuelSubscriber(interaction.user.id) });
 }
 
 /**
@@ -20,8 +29,8 @@ async function buildFuelCardFor(interaction) {
  */
 async function handleGiaxangCommand(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { card } = await buildFuelCardFor(interaction);
-    await interaction.editReply(cardPayload(card));
+    const { card, files } = await buildFuelCardFor(interaction);
+    await interaction.editReply(cardPayload(card, { files }));
 }
 
 /**
@@ -41,8 +50,9 @@ async function handleNotifyButton(interaction) {
 
     await interaction.deferUpdate();
     const alert = interaction.customId === FUEL_NOTIFY_ALERT_BUTTON_ID;
-    const report = await getFuelPrices();
-    await interaction.editReply(cardPayload(buildFuelCard(report, { subscribed, alert })));
+    const { card, files } = await buildCardWithImage(await getFuelPrices(), { subscribed, alert });
+    // attachments: [] bỏ ảnh cũ, chỉ giữ ảnh mới
+    await interaction.editReply({ ...cardPayload(card, { files }), attachments: [] });
     await interaction.followUp({
         content: subscribed
             ? "🔔 Đã bật: giá xăng dầu đổi là bot nhắn bạn ngay."
@@ -58,4 +68,5 @@ module.exports = {
         { customId: FUEL_NOTIFY_ALERT_BUTTON_ID, execute: handleNotifyButton },
     ],
     buildFuelCardFor,
+    buildCardWithImage,
 };

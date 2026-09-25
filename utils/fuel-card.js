@@ -45,14 +45,37 @@ function text(container, content) {
     container.addTextDisplayComponents((t) => t.setContent(content));
 }
 
+function notifyButton(subscribed, alert) {
+    return new ButtonBuilder()
+        .setCustomId(alert ? FUEL_NOTIFY_ALERT_BUTTON_ID : FUEL_NOTIFY_BUTTON_ID)
+        .setLabel(subscribed ? "Tắt báo khi giá đổi" : "Bật báo khi giá đổi")
+        .setEmoji(subscribed ? "🔕" : "🔔")
+        .setStyle(subscribed ? ButtonStyle.Secondary : ButtonStyle.Primary);
+}
+
+// Mô tả ảnh (hiện khi ảnh chưa tải / trình đọc màn hình)
+function imageDescription(report) {
+    return report.products.map((p) => `${p.title}: ${formatVnd(p.zone1)} / ${formatVnd(p.zone2)}`).join("; ").slice(0, 1000);
+}
+
 /**
  * @param {object} report - từ getFuelPrices
  * @param {object} [options]
  * @param {boolean} [options.subscribed] - người xem đang bật tự báo giá
  * @param {boolean} [options.alert] - thẻ tự báo khi giá vừa đổi
+ * @param {string|null} [options.imageFileName] - ảnh bảng giá đính kèm (price-image.js);
+ *        null = thẻ chữ (khi vẽ ảnh lỗi)
  */
-function buildFuelCard(report, { subscribed = false, alert = false } = {}) {
+function buildFuelCard(report, { subscribed = false, alert = false, imageFileName = null } = {}) {
     const container = new ContainerBuilder().setAccentColor(report.stale ? WARNING_ACCENT_COLOR : ACCENT_COLOR);
+
+    if (imageFileName) {
+        container.addMediaGalleryComponents((g) =>
+            g.addItems((item) => item.setURL(`attachment://${imageFileName}`).setDescription(imageDescription(report)))
+        );
+        container.addActionRowComponents((row) => row.setComponents(notifyButton(subscribed, alert)));
+        return container;
+    }
 
     const header = [
         alert ? "-# 🔔 GIÁ XĂNG DẦU VỪA ĐIỀU CHỈNH · PETROLIMEX" : "-# ⛽ GIÁ BÁN LẺ XĂNG DẦU PETROLIMEX · đồng/lít",
@@ -85,15 +108,7 @@ function buildFuelCard(report, { subscribed = false, alert = false } = {}) {
         );
     }
 
-    container.addActionRowComponents((row) =>
-        row.setComponents(
-            new ButtonBuilder()
-                .setCustomId(alert ? FUEL_NOTIFY_ALERT_BUTTON_ID : FUEL_NOTIFY_BUTTON_ID)
-                .setLabel(subscribed ? "Tắt báo khi giá đổi" : "Bật báo khi giá đổi")
-                .setEmoji(subscribed ? "🔕" : "🔔")
-                .setStyle(subscribed ? ButtonStyle.Secondary : ButtonStyle.Primary)
-        )
-    );
+    container.addActionRowComponents((row) => row.setComponents(notifyButton(subscribed, alert)));
     return container;
 }
 

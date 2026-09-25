@@ -78,16 +78,45 @@ function warningLines(report, { isToday, now }) {
     return lines;
 }
 
+function refreshButtonRow() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(GOLD_REFRESH_BUTTON_ID)
+            .setLabel("Làm mới")
+            .setEmoji("🔄")
+            .setStyle(ButtonStyle.Secondary)
+    );
+}
+
+// Mô tả ảnh (hiện khi ảnh chưa tải / trình đọc màn hình)
+function imageDescription(result) {
+    return result.items
+        .filter((i) => i.key)
+        .map((i) => `${i.name}: mua ${formatVnd(i.buy)}, bán ${formatVnd(i.sell)}`)
+        .join("; ")
+        .slice(0, 1000);
+}
+
 /**
  * @param {object} report - Từ getTodayGoldPrices / getGoldPricesByDate
  * @param {object} [options]
  * @param {boolean} [options.isToday] - true: có nút Làm mới + kiểm tra giá cũ
  * @param {Date} [options.now]
+ * @param {string|null} [options.imageFileName] - ảnh bảng giá đính kèm (price-image.js);
+ *        null = thẻ chữ (khi vẽ ảnh lỗi)
  */
-function buildGoldCard(report, { isToday = true, now = new Date() } = {}) {
+function buildGoldCard(report, { isToday = true, now = new Date(), imageFileName = null } = {}) {
     const { result, previous } = report;
     const warnings = isToday ? warningLines(report, { isToday, now }) : [];
     const container = new ContainerBuilder().setAccentColor(warnings.length ? WARNING_ACCENT_COLOR : ACCENT_COLOR);
+
+    if (imageFileName) {
+        container.addMediaGalleryComponents((g) =>
+            g.addItems((item) => item.setURL(`attachment://${imageFileName}`).setDescription(imageDescription(result)))
+        );
+        if (isToday) container.addActionRowComponents(refreshButtonRow());
+        return container;
+    }
 
     const source = SOURCES[result.source];
     container.addTextDisplayComponents((t) =>
@@ -124,17 +153,7 @@ function buildGoldCard(report, { isToday = true, now = new Date() } = {}) {
     ].filter(Boolean);
     container.addTextDisplayComponents((t) => t.setContent(`-# ${footer.join(" · ")}`));
 
-    if (isToday) {
-        container.addActionRowComponents(
-            new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(GOLD_REFRESH_BUTTON_ID)
-                    .setLabel("Làm mới")
-                    .setEmoji("🔄")
-                    .setStyle(ButtonStyle.Secondary)
-            )
-        );
-    }
+    if (isToday) container.addActionRowComponents(refreshButtonRow());
     return container;
 }
 

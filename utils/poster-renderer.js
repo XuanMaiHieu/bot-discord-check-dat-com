@@ -13,7 +13,8 @@ const WORKER_PATH = path.join(__dirname, "poster-worker.js");
 const RENDER_TIMEOUT_MS = 120 * 1000;
 
 /**
- * @param {Array<object>} jobs - Tham số renderMealPoster: { dish, name, date, tomorrow }
+ * @param {Array<object>} jobs - Tham số renderMealPoster: { dish, name, date, tomorrow },
+ *        hoặc { type: "fuel" | "gold", ...view } (xem poster-worker.js)
  * @returns {Promise<Array<Buffer|null>>} PNG theo đúng thứ tự jobs; null = poster đó vẽ lỗi.
  *          Reject nếu tiến trình con lỗi / quá thời gian (nơi gọi tự dùng thẻ chữ).
  */

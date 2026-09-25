@@ -4,6 +4,15 @@ const { buildGoldCard, GOLD_REFRESH_BUTTON_ID } = require("../utils/gold-card");
 const { cardPayload } = require("../utils/card-message");
 const { parseDayMonth, startOfDay, toDateKey } = require("../utils/workdays");
 const { alertGoldSourceProblem } = require("../scheduler/gold-health-check");
+const { renderGoldImage, imageAttachment } = require("../utils/price-image");
+
+const IMAGE_FILE_NAME = "gia-vang.png";
+
+// Thẻ giá vàng kèm ảnh bảng giá (vẽ lỗi thì thẻ chữ)
+async function buildCardWithImage(report, options) {
+    const { imageFileName, files } = imageAttachment(await renderGoldImage(report, options), IMAGE_FILE_NAME);
+    return { card: buildGoldCard(report, { ...options, imageFileName }), files };
+}
 
 const giavangCommand = new SlashCommandBuilder()
     .setName("giavang")
@@ -25,7 +34,7 @@ async function buildTodayCard(interaction, { refresh = false } = {}) {
     if (!report.result) {
         return { error: `Không lấy được giá vàng lúc này, thử lại sau nhé.\n-# ${report.failures.join(" | ")}` };
     }
-    return { card: buildGoldCard(report, { isToday: true }) };
+    return buildCardWithImage(report, { isToday: true });
 }
 
 /**
@@ -48,8 +57,8 @@ async function handleGiavangCommand(interaction) {
         }
 
         if (toDateKey(date) === toDateKey(today)) {
-            const { card, error } = await buildTodayCard(interaction);
-            await interaction.editReply(card ? cardPayload(card) : `❌ ${error}`);
+            const { card, files, error } = await buildTodayCard(interaction);
+            await interaction.editReply(card ? cardPayload(card, { files }) : `❌ ${error}`);
             return;
         }
 
@@ -60,7 +69,8 @@ async function handleGiavangCommand(interaction) {
             await interaction.editReply(`❌ Không có giá vàng Phú Quý ngày ${dayText}: ${error.message}`);
             return;
         }
-        await interaction.editReply(cardPayload(buildGoldCard(report, { isToday: false })));
+        const { card, files } = await buildCardWithImage(report, { isToday: false });
+        await interaction.editReply(cardPayload(card, { files }));
     } catch (error) {
         console.error("❌ Lỗi khi xử lý /giavang:", error);
         await interaction.editReply(`❌ Có lỗi xảy ra: ${error.message}`);
@@ -72,9 +82,10 @@ async function handleGiavangCommand(interaction) {
  */
 async function handleGoldRefreshButton(interaction) {
     await interaction.deferUpdate();
-    const { card, error } = await buildTodayCard(interaction, { refresh: true });
+    const { card, files, error } = await buildTodayCard(interaction, { refresh: true });
     if (card) {
-        await interaction.editReply(cardPayload(card));
+        // attachments: [] bỏ ảnh cũ, chỉ giữ ảnh mới
+        await interaction.editReply({ ...cardPayload(card, { files }), attachments: [] });
     } else {
         await interaction.followUp({ content: `❌ ${error}`, flags: MessageFlags.Ephemeral });
     }

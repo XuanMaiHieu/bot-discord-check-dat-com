@@ -1,6 +1,5 @@
 const cron = require("node-cron");
 const { getFuelPrices, takeUnnotifiedPeriod } = require("../utils/fuel-price");
-const { buildFuelCard } = require("../utils/fuel-card");
 const { sendCardToUser } = require("../utils/card-message");
 const { recipientsFromIds } = require("../utils/users");
 const { loadFuelSubscriberIds } = require("../utils/fuel-subscribers");
@@ -46,11 +45,14 @@ async function runFuelPriceCheck(client) {
     if (!takeUnnotifiedPeriod()) return { changed: false, sent: 0, failed: 0, total: 0 };
 
     const recipients = loadFuelUsers();
-    const card = buildFuelCard(report, { subscribed: true, alert: true });
+    // Nạp muộn để tránh vòng lặp require commands <-> scheduler
+    const { buildCardWithImage } = require("../commands/fuel");
+    // Vẽ ảnh 1 lần, gửi chung cho mọi người
+    const { card, files } = await buildCardWithImage(report, { subscribed: true, alert: true });
     let sent = 0;
     let failed = 0;
     for (const user of recipients) {
-        const result = await sendCardToUser(client, user.discordId, card);
+        const result = await sendCardToUser(client, user.discordId, card, { files });
         if (result.success) {
             sent++;
         } else {

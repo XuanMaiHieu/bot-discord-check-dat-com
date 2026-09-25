@@ -1,18 +1,12 @@
 /**
  * Vẽ ảnh bìa (poster) cho thẻ báo cơm 12h: nền màu theo thứ, tên món cỡ lớn,
- * emoji món, dải "Ngày mai". Font Be Vietnam Pro (SIL OFL, xem assets/fonts/OFL.txt),
- * emoji Twemoji (CC-BY 4.0) tải từ CDN jsDelivr.
+ * emoji món, dải "Ngày mai". Font và emoji: xem poster-kit.js.
  */
-const path = require("path");
-const { createCanvas, GlobalFonts, Image } = require("@napi-rs/canvas");
+const { createCanvas } = require("@napi-rs/canvas");
 const { WEEKDAY_LONG, WEEKDAY_SHORT, formatDayMonth, isWeekend } = require("./workdays");
 const { isEmptyMeal } = require("./meal-sheet");
 const { getDishEmoji } = require("./dish-emoji");
-
-const FONT_DIR = path.join(__dirname, "../assets/fonts");
-for (const weight of ["ExtraBold", "Bold", "SemiBold", "Medium"]) {
-    GlobalFonts.registerFromPath(path.join(FONT_DIR, `BeVietnamPro-${weight}.ttf`), `BVP ${weight}`);
-}
+const { loadEmojiImage, truncateToWidth } = require("./poster-kit");
 
 const WIDTH = 1200;
 const HEIGHT = 520;
@@ -30,55 +24,6 @@ const WEEKDAY_GRADIENTS = [
     ["#ec4899", "#be185d"], // T6
     ["#8b5cf6", "#6d28d9"], // T7 (làm bù)
 ];
-
-const TWEMOJI_BASE_URL = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg";
-const EMOJI_FETCH_TIMEOUT_MS = 5000;
-const emojiSvgCache = new Map();
-
-// "🍖" -> "1f356" (tên file Twemoji bỏ ký tự biến thể FE0F)
-function emojiCodepoints(emoji) {
-    return [...emoji]
-        .map((ch) => ch.codePointAt(0).toString(16))
-        .filter((hex) => hex !== "fe0f")
-        .join("-");
-}
-
-async function fetchEmojiSvg(emoji) {
-    const code = emojiCodepoints(emoji);
-    if (emojiSvgCache.has(code)) return emojiSvgCache.get(code);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), EMOJI_FETCH_TIMEOUT_MS);
-    try {
-        const response = await fetch(`${TWEMOJI_BASE_URL}/${code}.svg`, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const svg = Buffer.from(await response.arrayBuffer());
-        emojiSvgCache.set(code, svg);
-        return svg;
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-// Ảnh emoji ở đúng kích thước cần vẽ. SVG phải đặt kích thước TRƯỚC khi nạp,
-// nếu không sẽ bị vẽ ở 36px rồi phóng to -> nhòe. Lỗi mạng -> null (bỏ qua emoji).
-async function loadEmojiImage(emoji, size) {
-    try {
-        const svg = await fetchEmojiSvg(emoji);
-        const image = new Image();
-        image.width = size;
-        image.height = size;
-        await new Promise((resolve, reject) => {
-            image.onload = resolve;
-            image.onerror = reject;
-            image.src = svg;
-        });
-        return image;
-    } catch (error) {
-        console.log(`⚠️ Không tải được emoji ${emoji} cho poster: ${error.message}`);
-        return null;
-    }
-}
 
 // Chia chữ theo từ cho vừa `maxWidth` với font đang đặt trên ctx.
 // Một từ dài hơn maxWidth vẫn nằm nguyên trên 1 dòng (nơi gọi tự cắt bớt).
@@ -110,16 +55,6 @@ function fitLines(ctx, text, { maxWidth, maxLines, maxSize, minSize, font }) {
         }
     }
     return null;
-}
-
-// Cắt chữ cho vừa chiều rộng, thêm "…"
-function truncateToWidth(ctx, text, maxWidth) {
-    if (ctx.measureText(text).width <= maxWidth) return text;
-    let result = text;
-    while (result.length > 1 && ctx.measureText(`${result}…`).width > maxWidth) {
-        result = result.slice(0, -1);
-    }
-    return `${result.trimEnd()}…`;
 }
 
 function drawBackground(ctx, date) {
