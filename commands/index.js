@@ -13,6 +13,7 @@ const MODULES = [
     require("./abc"), // /abc
     require("./football"), // /fbdate, /fbname, /test-football
     require("./gold"), // /giavang, nút Làm mới
+    require("./fuel"), // /giaxang, nút bật / tắt báo giá
     require("./makeup-day"), // /lam-bu
     require("./gif"), // /test-send-gif, /test-standup
     require("./clean-standup"), // /don-standup

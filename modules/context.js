@@ -54,6 +54,13 @@ function createModuleContext(client, deps) {
                     () => require("../commands/gold").buildTodayCard(interaction),
                     "Không lấy được giá vàng"
                 ),
+            // Trả lời riêng người bấm: giá xăng dầu hiện tại
+            showFuel: (interaction) =>
+                replyWithCard(
+                    interaction,
+                    () => require("../commands/fuel").buildFuelCardFor(interaction),
+                    "Không lấy được giá xăng dầu"
+                ),
             // Trả lời riêng người bấm: lịch bóng đá tuần này
             showFootball: (interaction) =>
                 replyWithCard(

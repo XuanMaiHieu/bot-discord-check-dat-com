@@ -69,10 +69,11 @@ const THANKS = {
     features: [
         { key: "meal_week", title: "📅 Thực đơn cả tuần", text: "Xem hết món T2–T6 của bạn, khỏi mở sheet" },
         { key: "gold", title: "💰 Giá vàng hôm nay", text: "Phú Quý / BTMC, bấm là có giá mới nhất" },
+        { key: "fuel", title: "⛽ Giá xăng dầu", text: "Giá Petrolimex 2 vùng, bật báo là giá đổi bot nhắn liền" },
         { key: "football", title: "⚽ Lịch bóng đá trong tuần", text: "Trận nào đáng thức khuya, bot lọc sẵn rồi" },
     ],
     seeButton: "Xem ngay",
-    commandsHint: "-# Hoặc gõ /abcom · /giavang · /fbdate bất cứ lúc nào",
+    commandsHint: "-# Hoặc gõ /abcom · /giavang · /giaxang · /fbdate bất cứ lúc nào",
     donate: "### Donate (quẹt đi, quẹt đi)",
     // Câu chúc theo dịp ở cuối thẻ, hết dịp thì để "" là ẩn
     greeting: "### 🥮🏮 Chúc quý user Tết Trung thu vui vẻ!",

@@ -129,6 +129,7 @@ async function handleInteraction(interaction, ctx) {
     // Nút "Xem ngay" trên thẻ cảm ơn: không phụ thuộc đợt
     if (action === "see") {
         if (arg === "gold") return ctx.features.showGold(interaction);
+        if (arg === "fuel") return ctx.features.showFuel(interaction);
         if (arg === "football") return ctx.features.showFootball(interaction);
         return;
     }

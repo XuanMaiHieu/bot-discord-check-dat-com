@@ -196,7 +196,12 @@ function buildThanksCard({ gifUrl, mealWeekButtonId, qrFileName }) {
     divider(container);
 
     text(container, THANKS.featuresIntro);
-    const buttonIds = { meal_week: mealWeekButtonId, gold: `${PREFIX}see:gold`, football: `${PREFIX}see:football` };
+    const buttonIds = {
+        meal_week: mealWeekButtonId,
+        gold: `${PREFIX}see:gold`,
+        fuel: `${PREFIX}see:fuel`,
+        football: `${PREFIX}see:football`,
+    };
     for (const feature of THANKS.features) {
         container.addSectionComponents(
             new SectionBuilder()

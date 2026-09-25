@@ -1,6 +1,7 @@
 const { startDailyFoodScheduler } = require("./daily-food-notification");
 const { startFootballScheduler } = require("./football-notification");
 const { startGoldHealthCheckScheduler } = require("./gold-health-check");
+const { startFuelPriceScheduler } = require("./fuel-notification");
 const { startSheetHealthCheckScheduler } = require("./sheet-health-check");
 const { startWeeklyEmptyReminderScheduler } = require("./weekly-empty-reminder");
 const { startStandupCleanupScheduler } = require("./standup-notification");
@@ -13,6 +14,7 @@ const { startStandupCleanupScheduler } = require("./standup-notification");
  *   10:00 thứ 2, thứ 6   lịch bóng đá trong tuần
  *   12:00 ngày làm việc  thẻ báo cơm, 30 giây sau nhắc đứng dậy cho những người
  *                        đã nhận thẻ báo cơm (xem runLunchNotifications)
+ *   mỗi 30 phút          kiểm tra giá xăng Petrolimex, đổi thì báo người đã bật
  *   mỗi 5 phút           xóa tin nhắc đứng dậy đã gửi quá STANDUP_DELETE_AFTER_MINUTES
  *                        (mặc định 60 phút)
  */
@@ -20,6 +22,7 @@ function startSchedulers(client, deps) {
     startDailyFoodScheduler(client, deps);
     startFootballScheduler(client);
     startGoldHealthCheckScheduler(client);
+    startFuelPriceScheduler(client);
     startSheetHealthCheckScheduler(client);
     startWeeklyEmptyReminderScheduler(client);
     startStandupCleanupScheduler(client);

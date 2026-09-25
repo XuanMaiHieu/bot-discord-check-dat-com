@@ -11,6 +11,7 @@ const HELP_FIELDS = [
         value:
             "• `/abcom` - Tra cứu thông tin đăng ký cơm trưa\n" +
             "• `/giavang` - Xem giá vàng Phú Quý hôm nay\n" +
+            "• `/giaxang` - Xem giá xăng dầu Petrolimex, bật báo khi giá đổi\n" +
             "• `/fbdate`, `/fbname` - Lịch thi đấu Ngoại hạng Anh\n" +
             "• `/help` - Xem hướng dẫn này",
     },
