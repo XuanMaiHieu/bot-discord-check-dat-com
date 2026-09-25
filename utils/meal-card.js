@@ -91,8 +91,10 @@ function buildWeekButton() {
  * @param {{date: Date, value: string}|null} p.tomorrow - Món ngày mai; null = không hiện dòng này
  * @param {string|null} p.posterFileName - Tên file poster đính kèm. Có poster thì thẻ
  *        gồm poster + nút; không có thì thẻ ghi đầy đủ thông tin bằng chữ.
+ * @param {Array} p.extras - Component V2 do module chèn thêm (hook lunchCardExtras),
+ *        đặt ngay trên hàng nút
  */
-function buildDailyMealCard({ name, date, food, tomorrow = null, posterFileName = null }) {
+function buildDailyMealCard({ name, date, food, tomorrow = null, posterFileName = null, extras = [] }) {
     const container = new ContainerBuilder().setAccentColor(getWeekdayColor(date));
 
     if (posterFileName) {
@@ -115,6 +117,11 @@ function buildDailyMealCard({ name, date, food, tomorrow = null, posterFileName 
                 : `**${dishInline(tomorrow.value)}**`;
             addText(container, `⏭️ Ngày mai · ${formatShortDay(tomorrow.date)}: ${tomorrowText}`);
         }
+    }
+
+    if (extras.length > 0) {
+        addDivider(container);
+        container.spliceComponents(container.components.length, 0, ...extras);
     }
 
     container.addActionRowComponents((row) => row.setComponents(buildWeekButton()));

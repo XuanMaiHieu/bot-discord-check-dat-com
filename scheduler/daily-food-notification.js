@@ -18,6 +18,7 @@ const { renderPostersInChildProcess } = require("../utils/poster-renderer");
 const { loadRecipients, recipientsFromIds } = require("../utils/users");
 const { notifyAdmin } = require("../utils/admin");
 const { runStandupNotification } = require("./standup-notification");
+const { runHook } = require("../modules");
 
 // Nhắc đứng dậy gửi sau thẻ báo cơm 30 giây, để 2 tin không chen nhau
 const STANDUP_DELAY_MS = 30 * 1000;
@@ -175,7 +176,10 @@ async function runDailyFoodNotification(
     for (const [index, { user, label, meal }] of deliveries.entries()) {
         try {
             const png = posters[index];
-            const card = buildDailyMealCard({ ...meal, posterFileName: png ? POSTER_FILE_NAME : null });
+            // Phần module chèn thêm (vd nhắc feedback). Hook lỗi thì trả [] nên
+            // không làm mất tin báo cơm
+            const extras = await runHook("lunchCardExtras", { user, date, test: isTest });
+            const card = buildDailyMealCard({ ...meal, posterFileName: png ? POSTER_FILE_NAME : null, extras });
             const files = png ? [new AttachmentBuilder(png, { name: POSTER_FILE_NAME })] : [];
 
             const result = await sendCardToUser(client, deliverToId || user.discordId, card, { files });

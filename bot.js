@@ -3,6 +3,7 @@
  * giá vàng.
  *
  *   commands/   slash command + nút bấm (danh sách ở commands/index.js)
+ *   modules/    module cắm thêm, code tách riêng (xem modules/index.js)
  *   scheduler/  tin gửi tự động theo giờ (danh sách ở scheduler/index.js)
  *   utils/      đọc sheet, dựng thẻ, gọi API ngoài...
  *   data/       users.json + trạng thái lưu lại (không bị git pull ghi đè)
@@ -12,6 +13,8 @@ dotenv.config();
 
 const { Client, GatewayIntentBits, MessageFlags, REST, Routes } = require("discord.js");
 const { commandData, commandByName, buttonById } = require("./commands");
+const modules = require("./modules");
+const { createModuleContext } = require("./modules/context");
 const { startSchedulers } = require("./scheduler");
 const { initializeAuth, readSheetGrid, resolveSheetName } = require("./utils/google-sheets");
 const { getUserNameByDiscordId } = require("./utils/users");
@@ -34,13 +37,19 @@ const client = new Client({
     ],
 });
 
+// Module cắm thêm: không được đụng lệnh / nút có sẵn của bot
+modules.assertNoConflicts(commandData.map((c) => c.name), [...buttonById.keys()]);
+const moduleCtx = createModuleContext(client, deps);
+modules.setHookContext(moduleCtx);
+const allCommandData = [...commandData, ...modules.commandData];
+
 // Đăng ký toàn bộ slash command (global). Lưu ý: bot dev và bot trên server dùng
 // chung token, bot nào khởi động sau sẽ ghi đè danh sách lệnh của bot kia
 async function registerCommands() {
     try {
         const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-        await rest.put(Routes.applicationCommands(client.user.id), { body: commandData });
-        console.log(`✅ Đã đăng ký slash commands: ${commandData.map((c) => `/${c.name}`).join(", ")}`);
+        await rest.put(Routes.applicationCommands(client.user.id), { body: allCommandData });
+        console.log(`✅ Đã đăng ký slash commands: ${allCommandData.map((c) => `/${c.name}`).join(", ")}`);
     } catch (error) {
         console.error("❌ Lỗi khi đăng ký slash commands:", error);
     }
@@ -50,6 +59,7 @@ client.once("clientReady", async () => {
     console.log(`✅ Bot đã sẵn sàng! (${client.user.tag})`);
     await registerCommands();
     startSchedulers(client, deps);
+    await modules.startModules(moduleCtx);
 });
 
 // Báo lỗi cho người dùng khi handler ném lỗi mà chưa tự xử lý
@@ -66,20 +76,34 @@ async function replyWithError(interaction, error) {
     }
 }
 
-client.on("interactionCreate", async (interaction) => {
-    let handler = null;
-    let label = null;
-    if (interaction.isButton()) {
-        handler = buttonById.get(interaction.customId);
-        label = `nút ${interaction.customId}`;
-    } else if (interaction.isChatInputCommand()) {
-        handler = commandByName.get(interaction.commandName);
-        label = `/${interaction.commandName}`;
+// Tìm nơi xử lý: lệnh / nút của bot nhận `deps`, của module nhận `ctx`
+function resolveHandler(interaction) {
+    if (interaction.isChatInputCommand()) {
+        const label = `/${interaction.commandName}`;
+        const core = commandByName.get(interaction.commandName);
+        if (core) return { label, run: () => core.execute(interaction, deps) };
+        const fromModule = modules.commandByName.get(interaction.commandName);
+        if (fromModule) return { label, run: () => fromModule.execute(interaction, moduleCtx) };
+        return null;
     }
+
+    if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+        const label = `${interaction.isModalSubmit() ? "form" : "nút"} ${interaction.customId}`;
+        const core = interaction.isButton() ? buttonById.get(interaction.customId) : null;
+        if (core) return { label, run: () => core.execute(interaction, deps) };
+        const owner = modules.findInteractionModule(interaction.customId);
+        if (owner) return { label, run: () => owner.handleInteraction(interaction, moduleCtx) };
+    }
+    return null;
+}
+
+client.on("interactionCreate", async (interaction) => {
+    const handler = resolveHandler(interaction);
     if (!handler) return;
+    const { label } = handler;
 
     try {
-        await handler.execute(interaction, deps);
+        await handler.run();
     } catch (error) {
         console.error(`❌ Lỗi khi xử lý ${label}:`, error);
         await replyWithError(interaction, error);
