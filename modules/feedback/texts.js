@@ -76,7 +76,7 @@ const THANKS = {
     commandsHint: "-# Hoặc gõ /abcom · /giavang · /giaxang · /fbdate bất cứ lúc nào",
     donate: "### Donate (quẹt đi, quẹt đi)",
     // Câu chúc theo dịp ở cuối thẻ, hết dịp thì để "" là ẩn
-    greeting: "### 🥮🏮 Chúc quý user Tết Trung thu vui vẻ!",
+    greeting: "",
 };
 
 // GIF pháo hoa đầu thẻ cảm ơn (bốc ngẫu nhiên 1)
