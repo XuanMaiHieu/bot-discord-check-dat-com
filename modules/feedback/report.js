@@ -283,4 +283,4 @@ async function buildDetailMessages(ctx, campaign) {
     return messages;
 }
 
-module.exports = { buildDetailMessages, buildCsv, computeNps };
+module.exports = { buildDetailMessages, buildCsv, computeNps, resolveName };

@@ -9,7 +9,8 @@
  *                                  Bỏ trống = không chạy web, thẻ cảm ơn không có QR
  */
 const store = require("./store");
-const { commands } = require("./campaign");
+const campaign = require("./campaign");
+const reply = require("./reply");
 const { handleInteraction } = require("./interactions");
 const { lunchCardExtras } = require("./nag");
 const { setQrPng } = require("./thanks");
@@ -55,7 +56,7 @@ module.exports = {
     name: "feedback",
     enabled: () => process.env.FEEDBACK_ENABLED !== "false",
 
-    commands: commands.map((command) => ({ ...command, execute: withStore(command.execute) })),
+    commands: [...campaign.commands, ...reply.commands].map((command) => ({ ...command, execute: withStore(command.execute) })),
     interactionPrefix: PREFIX,
     handleInteraction: withStore(handleInteraction),
 

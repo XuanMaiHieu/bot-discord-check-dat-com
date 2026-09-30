@@ -5,6 +5,7 @@
  *   /feedback-tong-hop   thống kê đợt hiện tại / gần nhất (ẩn danh)
  *   /feedback-chi-tiet   gửi vào DM bộ tin thống kê đầy đủ có tên + file CSV
  *   /feedback-dong       đóng đợt đang mở
+ * Lệnh trả lời từng người nằm ở reply.js.
  */
 const {
     SlashCommandBuilder,
@@ -252,6 +253,11 @@ async function handleClose(interaction, ctx) {
 }
 
 module.exports = {
+    rootCommand,
+    clip,
+    sleep,
+    SEND_DELAY_MS,
+    MAX_REPLY_LENGTH,
     commands: [
         { data: testCommand, execute: handleTest },
         { data: inviteCommand, execute: handleInvite },

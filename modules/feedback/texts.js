@@ -99,6 +99,26 @@ const NAG_BUTTON = "Feedback ngay";
 
 const CLOSED = "Đợt feedback này đã đóng, cảm ơn bạn 🙏";
 
+// Tin bot trả lời từng người sau đợt feedback (/feedback-tra-loi). Ghép theo thứ tự:
+// mở đầu (nếu đã chấm / góp ý) → đề xuất → lỗi → lời riêng → kết. {admin} = tag admin
+const REPLY = {
+    title: "## 💌 Bot phản hồi feedback của bạn",
+    opening: "Cám ơn quý user là đã nhiệt tình react cũng như gửi feedback đến admin.",
+    idea:
+        "💡 Đây là dự án phi lợi nhuận phát triển và đóng góp bởi các user có nhu cầu về tính năng chính " +
+        "là thông báo xuất cơm hôm nay. Nên mọi tính năng được đề xuất bởi quý user sẽ được cân nhắc về " +
+        "tính thực dụng và mức độ hiệu quả để triển khai và vận hành trong thời gian sớm nhất.",
+    fix:
+        "🔧 Ohh sr quý user vì trải nghiệm chưa tốt. Nhưng chắc giữa chúng ta vẫn đang có những sự chưa " +
+        "hiểu nhau lắm. Bot sẽ thông tin rõ để chúng ta hiểu nhau hơn nhé. Bot hiện chỉ báo cơm theo sheet " +
+        "đăng ký của chị Hậu và trả lời lệnh (`/abcom`, `/giavang`, `/giaxang`), còn việc text khác những " +
+        "lệnh trên bot sẽ không hiểu và không có phản hồi gì với user mình. Nếu cần hỗ trợ hãy liên hệ " +
+        "admin {admin} sớm nhất.",
+    closing:
+        "Chúc quý user bữa trưa ngon miệng và buổi chiều làm việc hiệu quả, năng suất, hy vọng chúng ta sẽ có những trải " +
+        "nghiệm tuyệt vời cùng nhau.",
+};
+
 module.exports = {
     INVITE,
     RATINGS,
@@ -111,4 +131,5 @@ module.exports = {
     NAGS,
     NAG_BUTTON,
     CLOSED,
+    REPLY,
 };

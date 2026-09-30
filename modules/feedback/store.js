@@ -14,7 +14,8 @@
  * }
  *
  * Participant: { invitedAt, number, rating, ratedAt, features[], snoozeCount,
- *                nagCount, lastNagDate, thanksSentAt, submissions[{ at, liked, fix, idea }] }
+ *                nagCount, lastNagDate, thanksSentAt, submissions[{ at, liked, fix, idea }],
+ *                reply: { sentAt } | null }   // đã nhận tin trả lời chưa, xem reply.js
  *
  * Giữ bản trong bộ nhớ và ghi đè file sau mỗi lần sửa. Mọi hàm đều đồng bộ nên
  * không có 2 lần sửa chen nhau (Node chạy 1 luồng).
@@ -71,6 +72,7 @@ function newParticipant() {
         lastNagDate: null,
         thanksSentAt: null,
         submissions: [],
+        reply: null,
     };
 }
 
@@ -168,6 +170,7 @@ function getClapTotal() {
 module.exports = {
     TEST_CAMPAIGN_ID,
     init,
+    newParticipant,
     getCampaign,
     listCampaignIds,
     getCurrentCampaign,
