@@ -70,8 +70,20 @@ function normalize(text) {
     return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim();
 }
 
-function nameOf(ctx, discordId) {
-    return ctx.findUserByDiscordId(discordId)?.name || discordId;
+// Tên trong users.json, không có (người tự đăng ký /uongnuoc) thì tên Discord, cuối cùng là ID
+async function nameOf(ctx, discordId) {
+    const name = ctx.findUserByDiscordId(discordId)?.name;
+    if (name) return name;
+    try {
+        const user = await ctx.client.users.fetch(discordId);
+        return user.globalName || user.username;
+    } catch (error) {
+        return discordId;
+    }
+}
+
+async function namesOf(ctx, entries) {
+    return (await Promise.all(entries.map(({ discordId }) => nameOf(ctx, discordId)))).join(", ");
 }
 
 async function handleUser(interaction, ctx) {
@@ -116,6 +128,8 @@ async function handleInvite(interaction, ctx) {
 
 async function handleList(interaction, ctx) {
     if (await ctx.denyUnlessRoot(interaction)) return;
+    // Lấy tên Discord của người không có trong users.json có thể mất vài giây
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const members = store.allMembers();
     const on = members.filter(({ member }) => member.subscribed);
     const waiting = members.filter(({ member }) => !member.subscribed && member.invitedAt && !member.declinedAt);
@@ -123,15 +137,17 @@ async function handleList(interaction, ctx) {
 
     const lines = [
         `💧 **Nhắc uống nước** · đang bật **${on.length}** người`,
-        ...on.map(({ discordId, member }) => {
-            const day = store.today(member);
-            const status = day.off ? " · 🔕 tắt hôm nay" : "";
-            return `• ${nameOf(ctx, discordId)} · mỗi ${member.interval}' · hôm nay ${day.cups} cốc / ${day.reminders} lần nhắc${status}`;
-        }),
+        ...(await Promise.all(
+            on.map(async ({ discordId, member }) => {
+                const day = store.today(member);
+                const status = day.off ? " · 🔕 tắt hôm nay" : "";
+                return `• ${await nameOf(ctx, discordId)} · mỗi ${member.interval}' · hôm nay ${day.cups} cốc / ${day.reminders} lần nhắc${status}`;
+            })
+        )),
     ];
-    if (waiting.length) lines.push("", `⏳ Đã mời, chưa bấm: ${waiting.map(({ discordId }) => nameOf(ctx, discordId)).join(", ")}`);
-    if (declined.length) lines.push(`🙅 Từ chối: ${declined.map(({ discordId }) => nameOf(ctx, discordId)).join(", ")}`);
-    await interaction.reply({ content: clip(lines.join("\n")), flags: MessageFlags.Ephemeral });
+    if (waiting.length) lines.push("", `⏳ Đã mời, chưa bấm: ${await namesOf(ctx, waiting)}`);
+    if (declined.length) lines.push(`🙅 Từ chối: ${await namesOf(ctx, declined)}`);
+    await interaction.editReply(clip(lines.join("\n")));
 }
 
 async function handleTest(interaction, ctx) {

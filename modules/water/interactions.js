@@ -20,11 +20,12 @@ function subscribe(discordId) {
         m.subscribed = true;
         m.subscribedAt = new Date().toISOString();
         m.declinedAt = null;
+        m.failCount = 0;
     });
 }
 
 async function handleDrink(interaction, ctx) {
-    const current = store.today(store.getMember(interaction.user.id) || {});
+    const current = store.today(store.getMember(interaction.user.id));
     if (current.cups >= MAX_CUPS_PER_DAY) {
         await interaction.reply({ content: REMINDER.tooMany, flags: MessageFlags.Ephemeral });
         return;

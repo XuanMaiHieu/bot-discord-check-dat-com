@@ -17,6 +17,10 @@ const WINDOWS = [
     [13 * 60 + 15, 17 * 60 + 30],
 ];
 const SEND_DELAY_MS = 400; // giãn cách giữa các DM, tránh rate limit
+// Cron chạy lệch vài ms / vài giây: coi như đủ giờ nếu chỉ còn thiếu dưới 1 phút,
+// không thì 90' thành 95' (lỡ lượt quét, chờ lượt 5 phút sau)
+const GRACE_MS = 60 * 1000;
+const MAX_FAILS = 3; // gửi lỗi liên tiếp chừng này lần (vd tắt DM) thì tự tắt nhắc, báo admin
 
 const minutesOfDay = (date) => date.getHours() * 60 + date.getMinutes();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,12 +38,12 @@ function isDue(member, now) {
     if (!member.subscribed) return false;
     const day = store.today(member, now);
     if (day.off) return false;
-    if (day.snoozeUntil) return now >= new Date(day.snoozeUntil);
+    if (day.snoozeUntil) return now.getTime() + GRACE_MS >= new Date(day.snoozeUntil).getTime();
 
     const dayStart = new Date(now);
     dayStart.setHours(0, DAY_START, 0, 0);
     const marks = [dayStart, day.lastSentAt, day.lastDrinkAt].filter(Boolean).map((t) => new Date(t).getTime());
-    return now.getTime() - Math.max(...marks) >= member.interval * 60 * 1000;
+    return now.getTime() - Math.max(...marks) + GRACE_MS >= member.interval * 60 * 1000;
 }
 
 /**
@@ -59,26 +63,39 @@ async function sendReplacing(ctx, discordId, card) {
 }
 
 async function sendReminder(ctx, discordId, now = new Date()) {
-    const cups = store.today(store.getMember(discordId) || {}, now).cups;
+    const cups = store.today(store.getMember(discordId), now).cups;
     const result = await sendReplacing(ctx, discordId, buildReminderCard({ message: pickReminder(), cups }));
-    if (!result.success) {
-        console.error(`❌ Không gửi được nhắc uống nước cho ${discordId}: ${result.error}`);
-        return result;
-    }
-    store.updateMember(
+
+    // Lỗi cũng ghi lastSentAt: thử lại sau 1 chu kỳ, không phải mỗi 5 phút
+    const member = store.updateMember(
         discordId,
         (m, day) => {
-            day.reminders += 1;
             day.lastSentAt = now.toISOString();
             day.snoozeUntil = null;
+            if (result.success) {
+                day.reminders += 1;
+                m.failCount = 0;
+            } else {
+                m.failCount = (m.failCount || 0) + 1;
+                if (m.failCount >= MAX_FAILS) m.subscribed = false;
+            }
         },
         now
     );
+    if (!result.success) {
+        console.error(`❌ Không gửi được nhắc uống nước cho ${discordId} (lần ${member.failCount}): ${result.error}`);
+        if (!member.subscribed) {
+            await ctx.notifyAdmin(
+                "Nhắc uống nước",
+                `⚠️ Gửi cho <@${discordId}> lỗi ${MAX_FAILS} lần liên tiếp nên đã tự tắt nhắc. Lỗi cuối: ${result.error}`
+            );
+        }
+    }
     return result;
 }
 
 async function sendSummary(ctx, discordId, now = new Date()) {
-    const cups = store.today(store.getMember(discordId) || {}, now).cups;
+    const cups = store.today(store.getMember(discordId), now).cups;
     const result = await sendReplacing(ctx, discordId, buildSummaryCard(cups));
     if (!result.success) console.error(`❌ Không gửi được tổng kết uống nước cho ${discordId}: ${result.error}`);
     return result;

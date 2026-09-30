@@ -9,6 +9,7 @@
  *   subscribedAt,
  *   day: { date, cups, reminders, lastSentAt, lastDrinkAt, snoozeUntil, off },   // số liệu hôm nay
  *   lastMessage: { channelId, messageId } | null,   // tin nhắc / tổng kết gần nhất, xóa khi gửi tin mới
+ *   failCount,                    // số lần gửi nhắc lỗi liên tiếp (vd tắt DM), đủ MAX thì tự tắt
  *   promoDates: ["YYYY-MM-DD"]                    // những ngày đã thấy dòng giới thiệu ở thẻ 12h
  * }
  *
@@ -65,14 +66,15 @@ function newMember() {
         subscribedAt: null,
         day: newDay(dateKey()),
         lastMessage: null,
+        failCount: 0,
         promoDates: [],
     };
 }
 
-// Số liệu hôm nay của 1 người (sang ngày mới thì bắt đầu lại từ 0)
+// Số liệu hôm nay của 1 người (sang ngày mới / chưa có dữ liệu thì bắt đầu từ 0)
 function today(member, now = new Date()) {
     const key = dateKey(now);
-    return member.day?.date === key ? member.day : newDay(key);
+    return member?.day?.date === key ? member.day : newDay(key);
 }
 
 function getMember(discordId) {
