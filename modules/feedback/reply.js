@@ -2,9 +2,9 @@
  * /feedback-tra-loi (chỉ root): bot DM tin trả lời cho từng người sau đợt feedback,
  * gồm phần chung và câu riêng trong 1 lần chạy. Mặc định chỉ xem trước.
  *
- * Tin ghép từ các khối trong texts.js (REPLY): mở đầu → đề xuất → lỗi → câu riêng → kết.
- * Câu riêng và khối chọn tay nằm trong reply-notes.js. Không chọn tay thì khối đề xuất /
- * lỗi tự bật theo góp ý của người đó (có ô 💡 / 🔧).
+ * Tin ghép từ texts.js (REPLY): mở đầu → mỗi khối thích / cần sửa / đề xuất mà user có viết
+ * (trích lại feedback của user, rồi bot rep: câu chung của khối + câu riêng) → câu riêng chung → kết.
+ * Câu riêng nằm trong reply-notes.js.
  * Mỗi người nhận 1 lần: gửi xong lưu reply.sentAt, chạy lại chỉ gửi người còn lại.
  * Test (vd trong server không có người đó): `xem` tìm theo tên, `thu` gửi mọi tin vào DM root.
  */
@@ -15,6 +15,9 @@ const REPLY_NOTES = require("./reply-notes");
 const { COLORS, ratingLabel } = require("./cards");
 const { rootCommand, clip, sleep, SEND_DELAY_MS, MAX_REPLY_LENGTH } = require("./campaign");
 const { resolveName } = require("./report");
+
+const SECTION_KEYS = ["liked", "fix", "idea"];
+const MAX_QUOTE_LENGTH = 900; // mỗi khối; cả thẻ tối đa 4000 ký tự chữ
 
 const sendCommand = rootCommand("feedback-tra-loi", "[Root] Gửi tin trả lời feedback (chung + riêng) cho từng người")
     .addBooleanOption((option) =>
@@ -43,34 +46,51 @@ function noteFor(campaign, discordId) {
     return REPLY_NOTES[campaign.id]?.[discordId] || {};
 }
 
-// Khối đề xuất / lỗi: chọn tay trong reply-notes.js, không thì theo góp ý
-function replyBlocks(participant, custom) {
-    if (custom.blocks) return custom.blocks;
-    const blocks = [];
-    if (participant.submissions.some((s) => s.idea)) blocks.push("idea");
-    if (participant.submissions.some((s) => s.fix)) blocks.push("fix");
-    return blocks;
+/**
+ * Các khối sẽ hiện: user có viết ô đó và bot có câu rep (câu chung của khối, câu riêng, hoặc cả hai).
+ * @returns {Array<{ key, quote, replies: string[] }>}
+ */
+function buildSections(participant, custom, adminId) {
+    const sections = [];
+    for (const key of SECTION_KEYS) {
+        const written = participant.submissions.map((s) => s[key]).filter(Boolean);
+        if (!written.length) continue;
+        const generic = REPLY.sections[key].reply;
+        const useGeneric = generic && (!custom.generic || custom.generic.includes(key));
+        const replies = [useGeneric && generic.replace("{admin}", `<@${adminId}>`), custom[key]].filter(Boolean);
+        if (!replies.length) continue;
+        sections.push({ key, quote: clip(written.join("\n"), MAX_QUOTE_LENGTH), replies });
+    }
+    return sections;
 }
 
 function buildReplyCard(participant, custom, adminId) {
     const container = new ContainerBuilder().setAccentColor(COLORS.thanks);
     const text = (content) => container.addTextDisplayComponents((t) => t.setContent(content));
-    const blocks = replyBlocks(participant, custom);
+    const divider = () =>
+        container.addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 
     text(REPLY.title);
     if (participant.rating || participant.submissions.length) text(REPLY.opening);
-    if (blocks.includes("idea")) text(REPLY.idea);
-    if (blocks.includes("fix")) text(REPLY.fix.replace("{admin}", `<@${adminId}>`));
-    if (custom.note) text(`✉️ ${custom.note}`);
-    container.addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    for (const section of buildSections(participant, custom, adminId)) {
+        divider();
+        // ">>> " trích dẫn đến hết khối chữ, nên feedback của user tách riêng 1 khối chữ
+        text(`${REPLY.sections[section.key].title}\n>>> ${section.quote}`);
+        text(`${REPLY.botLabel} ${section.replies.join("\n")}`);
+    }
+    if (custom.note) {
+        divider();
+        text(`✉️ ${custom.note}`);
+    }
+    divider();
     text(REPLY.closing);
     return container;
 }
 
-function describeBlocks(participant, custom) {
-    const names = { idea: "💡 đề xuất", fix: "🔧 lỗi" };
-    const blocks = replyBlocks(participant, custom).map((b) => names[b]);
-    return blocks.length ? blocks.join(" + ") : "chỉ mở đầu";
+function describeSections(participant, custom) {
+    const names = { liked: "💚 thích", fix: "🔧 cần sửa", idea: "💡 đề xuất" };
+    const sections = buildSections(participant, custom, "").map((section) => names[section.key]);
+    return sections.length ? sections.join(" + ") : "chỉ mở đầu + kết";
 }
 
 // Người có tin: đã chấm / góp ý / có câu riêng, trừ root. Mặc định bỏ người đã nhận. Xếp theo tên
@@ -81,7 +101,8 @@ async function loadRecipients(ctx, campaign, { includeSent = false } = {}) {
         const participant = campaign.participants[discordId] || store.newParticipant();
         const custom = noteFor(campaign, discordId);
         if (ctx.isRoot(discordId) || (participant.reply?.sentAt && !includeSent)) continue;
-        if (!participant.rating && !participant.submissions.length && !custom.note) continue;
+        const hasCustom = custom.note || SECTION_KEYS.some((key) => custom[key]);
+        if (!participant.rating && !participant.submissions.length && !hasCustom) continue;
         rows.push({ discordId, participant, custom, name: await resolveName(ctx, discordId) });
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name, "vi"));
@@ -162,9 +183,8 @@ async function handleSend(interaction, ctx) {
             `👀 **Xem trước** · đợt **${campaign.id}** · sẽ gửi **${rows.length}** người (bỏ qua người đã nhận):`,
             ...rows.map(({ name, participant: p, custom }) => {
                 const rating = p.rating ? ratingLabel(p.rating) : "chưa chấm";
-                const shortNote = custom.note?.length > 50 ? `${custom.note.slice(0, 50)}…` : custom.note;
-                const note = custom.note ? ` · ✉️ ${shortNote}` : "";
-                return `• **${name}** · ${rating} · ${describeBlocks(p, custom)}${note}`;
+                const note = custom.note || SECTION_KEYS.some((key) => custom[key]) ? " · ✉️ có câu riêng" : "";
+                return `• **${name}** · ${rating} · ${describeSections(p, custom)}${note}`;
             }),
             "",
             "Xem nguyên tin 1 người: `xem: <tên>`. Gửi thử mọi tin vào DM của bạn: `thu: True`. Gửi thật: `gui_that: True`.",

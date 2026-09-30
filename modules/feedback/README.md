@@ -26,7 +26,7 @@ Code nằm riêng trong thư mục này, chạy chung process với bot qua ổ 
 | `/feedback-dong` | Đóng đợt đang mở |
 | `/feedback-tra-loi [gui_that] [xem] [thu]` | Bot DM tin trả lời (phần chung + câu riêng) cho người đã chấm / góp ý / có câu riêng, đợt đang mở hoặc gần nhất. Mặc định chỉ xem trước danh sách. `xem: <tên hoặc ID>` hiện nguyên tin của 1 người (gõ không dấu được, không cần người đó ở cùng server). `thu: True` gửi toàn bộ tin vào DM của root để test, không ai khác nhận, không tính là đã gửi. Mỗi người nhận 1 lần |
 
-**Tin trả lời** ghép từ các khối trong `texts.js` (`REPLY`): mở đầu (nếu đã chấm / góp ý) → 💡 đề xuất (nếu có ô đề xuất) → 🔧 lỗi (nếu có ô cần sửa) → ✉️ câu riêng → kết. Câu riêng và khối chọn tay cho từng người đặt trong `reply-notes.js`, theo mã đợt và Discord ID.
+**Tin trả lời** ghép từ `texts.js` (`REPLY`): mở đầu (nếu đã chấm / góp ý) → mỗi khối 💚 thích / 🔧 cần sửa / 💡 đề xuất mà user có viết: trích lại feedback của user, rồi bot rep (câu chung của khối + câu riêng) → kết. Khối không có câu rep nào thì ẩn. Câu riêng theo từng khối đặt trong `reply-notes.js`, theo mã đợt và Discord ID.
 
 ## Env
 
