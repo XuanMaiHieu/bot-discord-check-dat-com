@@ -11,6 +11,7 @@ const { denyUnlessRoot, notifyAdmin } = require("../utils/admin");
 const { cardPayload, sendCardToUser } = require("../utils/card-message");
 const { loadRecipients, findUserByDiscordId } = require("../utils/users");
 const { MEAL_WEEK_BUTTON_ID } = require("../utils/meal-card");
+const { isWorkingDay } = require("../utils/workdays");
 
 // Trả lời riêng người bấm bằng 1 thẻ dựng bất đồng bộ; lỗi thì báo chữ
 async function replyWithCard(interaction, buildCard, errorPrefix) {
@@ -38,6 +39,23 @@ function createModuleContext(client, deps) {
 
         cardPayload,
         sendCardToUser: (discordId, container, options) => sendCardToUser(client, discordId, container, options),
+
+        // Xóa 1 tin bot đã gửi (vd tin nhắc cũ trong DM). Tin / kênh không còn cũng tính là xong
+        async deleteMessage(channelId, messageId) {
+            try {
+                const channel = await client.channels.fetch(channelId);
+                await channel.messages.delete(messageId);
+                return true;
+            } catch (error) {
+                // 10008 = Unknown Message, 10003 = Unknown Channel
+                if (error.code === 10008 || error.code === 10003) return true;
+                console.error(`⚠️ Không xóa được tin ${messageId}: ${error.message}`);
+                return false;
+            }
+        },
+
+        // Ngày làm việc: T2-T6, hoặc thứ 7 / CN admin bật làm bù (/lam-bu)
+        isWorkingDay,
 
         // Người đang nhận tin cơm 12h (enabled, có Discord ID)
         loadEnabledUsers: () => loadRecipients((user) => user.enabled === true),
