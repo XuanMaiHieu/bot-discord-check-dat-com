@@ -21,6 +21,8 @@ const ACTIONS = {
     drink: `${PREFIX}drink`,
     snooze: `${PREFIX}snooze`,
     off: `${PREFIX}off`,
+    resume: `${PREFIX}resume`, // bật lại hôm nay, trên tin nhắc đã tắt
+    resumeHere: `${PREFIX}resume-here`, // bật lại hôm nay, trên thẻ cài đặt
     subscribe: `${PREFIX}sub`, // trả lời riêng (dòng giới thiệu trong thẻ cơm, không được sửa thẻ cơm)
     subscribeHere: `${PREFIX}sub-here`, // sửa tại chỗ thẻ mời / thẻ cài đặt
     unsubscribe: `${PREFIX}unsub`,
@@ -45,13 +47,17 @@ function cupsLine(cups) {
 
 /**
  * Tin nhắc. `status` = câu thay cho câu nhắc sau khi bấm nút (vd "Ngoan! 💙");
- * `buttons: false` khi đã hoãn / tắt hôm nay.
+ * `buttons: false` khi đã hoãn; `off: true` khi đã tắt hôm nay (chỉ còn nút Bật lại).
  */
-function buildReminderCard({ message, cups, buttons = true }) {
+function buildReminderCard({ message, cups, buttons = true, off = false }) {
     const container = new ContainerBuilder().setAccentColor(COLOR);
     text(container, `### ${message}`);
     text(container, cupsLine(cups));
-    if (buttons) {
+    if (off) {
+        container.addActionRowComponents((row) =>
+            row.setComponents(button(ACTIONS.resume, BUTTONS.resume, "🔔", ButtonStyle.Primary))
+        );
+    } else if (buttons) {
         container.addActionRowComponents((row) =>
             row.setComponents(
                 button(ACTIONS.drink, BUTTONS.drink, "💧", ButtonStyle.Primary),
@@ -70,12 +76,20 @@ function buildSummaryCard(cups) {
     return container;
 }
 
-// Thẻ cài đặt (/uongnuoc và sau khi đăng ký): trạng thái, chọn tần suất, bật / tắt
-function buildSettingsCard(member, cupsToday) {
+// Thẻ cài đặt (/uongnuoc và sau khi đăng ký): trạng thái, chọn tần suất, bật / tắt.
+// `day` = số liệu hôm nay (store.today)
+function buildSettingsCard(member, day) {
     const container = new ContainerBuilder().setAccentColor(COLOR);
     text(container, SETTINGS.title);
     text(container, member?.subscribed ? SETTINGS.on.replace("{interval}", member.interval) : SETTINGS.off);
-    if (member?.subscribed) text(container, cupsLine(cupsToday));
+    if (member?.subscribed) text(container, cupsLine(day.cups));
+    if (member?.subscribed && day.off) {
+        container.addSectionComponents((section) =>
+            section
+                .addTextDisplayComponents((t) => t.setContent(SETTINGS.offToday))
+                .setButtonAccessory(button(ACTIONS.resumeHere, BUTTONS.resume, "🔔", ButtonStyle.Primary))
+        );
+    }
     text(container, SETTINGS.schedule);
     container.addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 

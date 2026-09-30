@@ -8,7 +8,7 @@ Ra đời từ đề xuất trong đợt feedback 2026-09. Chạy chung process 
 1. **User đặc thù:** root chạy `/nuoc-moi nguoi:"hong, linh"`. Bot DM **thẻ mời**, chưa nhắc gì cho tới khi người đó bấm **Đăng ký**. Bấm **Không, cảm ơn** thì thôi, không bị giới thiệu nữa.
 2. **User khác:** gõ `/uongnuoc` để bật. Thẻ báo cơm 12h có dòng giới thiệu kèm nút **Đăng ký** cho người chưa bật, mỗi người thấy tối đa 3 ngày.
 3. **Nhắc:** chỉ ngày làm việc (có tính ngày làm bù `/lam-bu`), 8:30–11:45 và 13:15–17:30. Lần đầu lúc 8:00 + tần suất (90' thì 9:30), sau đó cứ đủ tần suất kể từ lần nhắc hoặc lần bấm "Đã uống" gần nhất.
-4. **Tin nhắc** có 3 nút: 💧 **Đã uống** (+1 cốc, lần nhắc sau tính lại từ lúc bấm), ⏰ **Hoãn 30'**, 🔕 **Tắt hôm nay**.
+4. **Tin nhắc** có 3 nút: 💧 **Đã uống** (+1 cốc, lần nhắc sau tính lại từ lúc bấm), ⏰ **Hoãn 30'**, 🔕 **Tắt hôm nay** (tin đổi thành nút 🔔 **Bật lại**; thẻ `/uongnuoc` cũng có nút này khi hôm nay đang tắt).
 5. **17:35:** tổng kết số cốc cho người hôm nay có được nhắc hoặc có uống (trừ người đã tắt hôm nay).
 6. Gửi tin mới thì bot **xóa tin cũ**, DM chỉ còn tin nhắc / tổng kết mới nhất.
 

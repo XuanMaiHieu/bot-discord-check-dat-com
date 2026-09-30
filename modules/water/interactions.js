@@ -12,7 +12,7 @@ const MAX_CUPS_PER_DAY = 20; // chặn bấm liên tục cho vui
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 function settingsPayload(ctx, member, { ephemeral = false } = {}) {
-    return ctx.cardPayload(buildSettingsCard(member, store.today(member).cups), { ephemeral });
+    return ctx.cardPayload(buildSettingsCard(member, store.today(member)), { ephemeral });
 }
 
 function subscribe(discordId) {
@@ -52,8 +52,25 @@ async function handleOff(interaction, ctx) {
         day.off = true;
     });
     await interaction.update(
-        ctx.cardPayload(buildReminderCard({ message: REMINDER.off, cups: member.day.cups, buttons: false }))
+        ctx.cardPayload(buildReminderCard({ message: REMINDER.off, cups: member.day.cups, off: true }))
     );
+}
+
+// Bật lại sau "Tắt hôm nay": nhắc tiếp theo lịch (đủ tần suất kể từ lần nhắc / uống gần nhất)
+function resumeToday(discordId) {
+    return store.updateMember(discordId, (m, day) => {
+        day.off = false;
+    });
+}
+
+async function handleResume(interaction, ctx) {
+    const member = resumeToday(interaction.user.id);
+    await interaction.update(ctx.cardPayload(buildReminderCard({ message: REMINDER.resumed, cups: member.day.cups })));
+}
+
+async function handleResumeHere(interaction, ctx) {
+    const member = resumeToday(interaction.user.id);
+    await interaction.update(settingsPayload(ctx, member));
 }
 
 // Nút Đăng ký trên dòng giới thiệu ở thẻ cơm: trả lời riêng, không đụng thẻ cơm
@@ -99,6 +116,8 @@ const HANDLERS = {
     [ACTIONS.drink]: handleDrink,
     [ACTIONS.snooze]: handleSnooze,
     [ACTIONS.off]: handleOff,
+    [ACTIONS.resume]: handleResume,
+    [ACTIONS.resumeHere]: handleResumeHere,
     [ACTIONS.subscribe]: handleSubscribe,
     [ACTIONS.subscribeHere]: handleSubscribeHere,
     [ACTIONS.unsubscribe]: handleUnsubscribe,

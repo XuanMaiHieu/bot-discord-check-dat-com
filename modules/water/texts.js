@@ -21,6 +21,7 @@ const BUTTONS = {
     drink: "Đã uống",
     snooze: "Hoãn 30'",
     off: "Tắt hôm nay",
+    resume: "Bật lại",
     subscribe: "Đăng ký",
     unsubscribe: "Tắt nhắc",
     decline: "Không, cảm ơn",
@@ -30,6 +31,7 @@ const REMINDER = {
     today: "Hôm nay: {cups}/{goal} cốc",
     snoozed: "⏰ Oke, 30 phút nữa bot nhắc lại.",
     off: "🔕 Hôm nay bot im lặng. Mai gặp lại nha.",
+    resumed: "🔔 Bật lại rồi, bot nhắc tiếp theo lịch nha.",
     tooMany: "Hôm nay đủ nhiều rồi đó, uống từ từ thôi 😅",
 };
 
@@ -46,6 +48,7 @@ const SETTINGS = {
     title: "## 💧 Nhắc uống nước",
     on: "✅ **Đang bật** · nhắc mỗi **{interval} phút**",
     off: "⏸️ **Đang tắt**",
+    offToday: "🔕 Hôm nay đang tắt, mai tự nhắc lại",
     schedule: "-# Ngày làm việc, 8:30–11:45 và 13:15–17:30 (nghỉ trưa không nhắc). Tin nhắc cũ tự xóa khi có tin mới.",
     intervalPlaceholder: "Nhắc bao lâu 1 lần?",
     intervalLabel: "Mỗi {interval} phút",
