@@ -24,7 +24,7 @@ Code nằm riêng trong thư mục này, chạy chung process với bot qua ổ 
 | `/feedback-tong-hop [test]` | Điểm TB, phân bố điểm, tính năng hay xem, số lần "Để sau", tổng pháo tay, góp ý theo Người #N |
 | `/feedback-chi-tiet [dot] [test]` | Gửi vào DM root 1 bộ tin **có tên thật**, không cắt bớt: tổng quan (điểm TB, NPS, phân bố điểm, hay xem, pháo tay, ai chưa chấm), bảng điểm, toàn bộ góp ý từng người, file CSV (mỗi lần góp ý 1 dòng) để mở bằng Excel |
 | `/feedback-dong` | Đóng đợt đang mở |
-| `/feedback-tra-loi [gui_that] [xem]` | Bot DM tin trả lời (phần chung + câu riêng) cho người đã chấm / góp ý / có câu riêng, đợt đang mở hoặc gần nhất. Mặc định chỉ xem trước danh sách, `xem:@ai` hiện nguyên tin của 1 người. Mỗi người nhận 1 lần |
+| `/feedback-tra-loi [gui_that] [xem] [thu]` | Bot DM tin trả lời (phần chung + câu riêng) cho người đã chấm / góp ý / có câu riêng, đợt đang mở hoặc gần nhất. Mặc định chỉ xem trước danh sách. `xem: <tên hoặc ID>` hiện nguyên tin của 1 người (gõ không dấu được, không cần người đó ở cùng server). `thu: True` gửi toàn bộ tin vào DM của root để test, không ai khác nhận, không tính là đã gửi. Mỗi người nhận 1 lần |
 
 **Tin trả lời** ghép từ các khối trong `texts.js` (`REPLY`): mở đầu (nếu đã chấm / góp ý) → 💡 đề xuất (nếu có ô đề xuất) → 🔧 lỗi (nếu có ô cần sửa) → ✉️ câu riêng → kết. Câu riêng và khối chọn tay cho từng người đặt trong `reply-notes.js`, theo mã đợt và Discord ID.
 

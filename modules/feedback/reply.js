@@ -6,6 +6,7 @@
  * Câu riêng và khối chọn tay nằm trong reply-notes.js. Không chọn tay thì khối đề xuất /
  * lỗi tự bật theo góp ý của người đó (có ô 💡 / 🔧).
  * Mỗi người nhận 1 lần: gửi xong lưu reply.sentAt, chạy lại chỉ gửi người còn lại.
+ * Test (vd trong server không có người đó): `xem` tìm theo tên, `thu` gửi mọi tin vào DM root.
  */
 const { MessageFlags, ContainerBuilder, SeparatorSpacingSize } = require("discord.js");
 const store = require("./store");
@@ -22,8 +23,17 @@ const sendCommand = rootCommand("feedback-tra-loi", "[Root] Gửi tin trả lờ
             .setDescription("TRUE = gửi thật. Mặc định chỉ xem trước danh sách")
             .setRequired(false)
     )
-    .addUserOption((option) =>
-        option.setName("xem").setDescription("Xem trước nguyên tin sẽ gửi cho 1 người").setRequired(false)
+    .addStringOption((option) =>
+        option
+            .setName("xem")
+            .setDescription("Xem trước nguyên tin của 1 người: gõ tên (có dấu / không dấu) hoặc Discord ID")
+            .setRequired(false)
+    )
+    .addBooleanOption((option) =>
+        option
+            .setName("thu")
+            .setDescription("TRUE = gửi thử toàn bộ tin vào DM của bạn, không ai khác nhận, không tính là đã gửi")
+            .setRequired(false)
     )
     .toJSON();
 
@@ -63,18 +73,69 @@ function describeBlocks(participant, custom) {
     return blocks.length ? blocks.join(" + ") : "chỉ mở đầu";
 }
 
-// Người sẽ nhận: đã chấm / góp ý / có câu riêng, chưa nhận lần nào, trừ root. Xếp theo tên
-async function loadRecipients(ctx, campaign) {
+// Người có tin: đã chấm / góp ý / có câu riêng, trừ root. Mặc định bỏ người đã nhận. Xếp theo tên
+async function loadRecipients(ctx, campaign, { includeSent = false } = {}) {
     const ids = new Set([...Object.keys(campaign.participants), ...Object.keys(REPLY_NOTES[campaign.id] || {})]);
     const rows = [];
     for (const discordId of ids) {
         const participant = campaign.participants[discordId] || store.newParticipant();
         const custom = noteFor(campaign, discordId);
-        if (ctx.isRoot(discordId) || participant.reply?.sentAt) continue;
+        if (ctx.isRoot(discordId) || (participant.reply?.sentAt && !includeSent)) continue;
         if (!participant.rating && !participant.submissions.length && !custom.note) continue;
         rows.push({ discordId, participant, custom, name: await resolveName(ctx, discordId) });
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+}
+
+// "Hoàng Thị Tiên Diễm" -> "hoang thi tien diem", để gõ không dấu vẫn tìm được
+function normalize(text) {
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim();
+}
+
+function previewLabel(row) {
+    return `-# 👀 Xem trước tin cho **${row.name}** · ${row.participant.reply?.sentAt ? "đã nhận rồi, sẽ không gửi lại" : "chưa gửi"}`;
+}
+
+async function handlePreview(interaction, ctx, campaign, query) {
+    // Lấy tên Discord của người không có trong users.json có thể mất vài giây
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const rows = await loadRecipients(ctx, campaign, { includeSent: true });
+    const matches = rows.filter((row) => row.discordId === query || normalize(row.name).includes(normalize(query)));
+    if (matches.length !== 1) {
+        const names = (matches.length ? matches : rows).map((row) => row.name).join(", ");
+        await interaction.editReply(
+            clip(
+                matches.length
+                    ? `Khớp ${matches.length} người, gõ rõ hơn: ${names}`
+                    : `Không ai có tin trả lời khớp "${query}". Những người có tin: ${names || "chưa có"}`,
+                MAX_REPLY_LENGTH
+            )
+        );
+        return;
+    }
+    const row = matches[0];
+    const card = buildReplyCard(row.participant, row.custom, ctx.adminId).addTextDisplayComponents((t) =>
+        t.setContent(`${previewLabel(row)} · đợt ${campaign.id}`)
+    );
+    await interaction.editReply(ctx.cardPayload(card));
+}
+
+// Gửi mọi tin (kể cả người đã nhận) vào DM root, mỗi tin ghi tên người nhận. Không lưu gì
+async function handleTrial(interaction, ctx, campaign) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const rows = await loadRecipients(ctx, campaign, { includeSent: true });
+    for (let i = 0; i < rows.length; i++) {
+        const card = buildReplyCard(rows[i].participant, rows[i].custom, ctx.adminId).addTextDisplayComponents((t) =>
+            t.setContent(`-# 🧪 TIN THỬ ${i + 1}/${rows.length} · gửi cho **${rows[i].name}** · chỉ bạn thấy`)
+        );
+        const result = await ctx.sendCardToUser(interaction.user.id, card);
+        if (!result.success) {
+            await interaction.editReply(`❌ Gửi được ${i}/${rows.length} tin thử vào DM thì lỗi: ${result.error}`);
+            return;
+        }
+        await sleep(SEND_DELAY_MS);
+    }
+    await interaction.editReply(`🧪 Đã gửi ${rows.length} tin thử vào DM của bạn. Chưa ai khác nhận gì.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -88,16 +149,9 @@ async function handleSend(interaction, ctx) {
         return;
     }
 
-    const previewUser = interaction.options.getUser("xem");
-    if (previewUser) {
-        const participant = campaign.participants[previewUser.id] || store.newParticipant();
-        const status = participant.reply?.sentAt ? "đã nhận rồi, sẽ không gửi lại" : "chưa gửi";
-        const card = buildReplyCard(participant, noteFor(campaign, previewUser.id), ctx.adminId).addTextDisplayComponents(
-            (t) => t.setContent(`-# 👀 Xem trước tin cho **${previewUser.globalName || previewUser.username}** · đợt ${campaign.id} · ${status}`)
-        );
-        await interaction.reply(ctx.cardPayload(card, { ephemeral: true }));
-        return;
-    }
+    const query = interaction.options.getString("xem")?.trim();
+    if (query) return handlePreview(interaction, ctx, campaign, query);
+    if (interaction.options.getBoolean("thu") === true) return handleTrial(interaction, ctx, campaign);
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const sendForReal = interaction.options.getBoolean("gui_that") === true;
@@ -113,7 +167,7 @@ async function handleSend(interaction, ctx) {
                 return `• **${name}** · ${rating} · ${describeBlocks(p, custom)}${note}`;
             }),
             "",
-            "Xem nguyên tin 1 người: `xem:@...`. Chạy lại với `gui_that: True` để gửi thật.",
+            "Xem nguyên tin 1 người: `xem: <tên>`. Gửi thử mọi tin vào DM của bạn: `thu: True`. Gửi thật: `gui_that: True`.",
         ];
         await interaction.editReply(clip(lines.join("\n"), MAX_REPLY_LENGTH));
         return;
