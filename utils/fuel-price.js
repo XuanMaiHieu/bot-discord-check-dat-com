@@ -33,7 +33,7 @@ const PRICE_QUERY = {
 
 const FETCH_TIMEOUT_MS = 8 * 1000;
 const CACHE_TTL_MS = 30 * 60 * 1000;
-const SETTLE_MS = 20 * 60 * 1000;
+const SETTLE_MS = 10 * 60 * 1000;
 
 // Khoảng giá hợp lý (đồng/lít). Ngoài khoảng này coi như API trả sai
 const MIN_PRICE = 5_000;

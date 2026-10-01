@@ -6,8 +6,9 @@ const { loadFuelSubscriberIds } = require("../utils/fuel-subscribers");
 const { notifyAdmin } = require("../utils/admin");
 const { toDateKey } = require("../utils/workdays");
 
-// API lỗi liên tục quá số lần này (mỗi lần cách 30 phút) thì báo root, tối đa 1 lần/ngày
-const FAILURES_BEFORE_ALERT = 6;
+const CHECK_EVERY_MINUTES = 10;
+// API lỗi liên tục quá số lần này (~3 tiếng) thì báo root, tối đa 1 lần/ngày
+const FAILURES_BEFORE_ALERT = 18;
 
 let consecutiveFailures = 0;
 let alertedDateKey = null;
@@ -24,7 +25,7 @@ async function alertApiProblem(client, reason) {
     await notifyAdmin(
         client,
         "Không lấy được giá xăng Petrolimex",
-        `API lỗi ${consecutiveFailures} lần liên tiếp (mỗi lần cách 30 phút).\nLỗi: ${reason}\n\n` +
+        `API lỗi ${consecutiveFailures} lần liên tiếp (mỗi lần cách ${CHECK_EVERY_MINUTES} phút).\nLỗi: ${reason}\n\n` +
             "/giaxang đang hiện giá lưu gần nhất. Nếu API đã đổi thì cần sửa `utils/fuel-price.js`."
     );
 }
@@ -65,10 +66,10 @@ async function runFuelPriceCheck(client) {
     return { changed: true, sent, failed, total: recipients.length };
 }
 
-// Cứ 30 phút kiểm tra 1 lần. Kỳ điều hành thường chiều thứ 5 nhưng có thể dời
-// ngày (lễ, Tết) nên kiểm tra cả tuần; API nhẹ, 48 lần/ngày không đáng kể
+// Cứ 10 phút kiểm tra 1 lần. Kỳ điều hành thường chiều thứ 5 nhưng có thể dời
+// ngày (lễ, Tết) nên kiểm tra cả tuần; API nhẹ, 144 lần/ngày không đáng kể
 function startFuelPriceScheduler(client) {
-    cron.schedule("*/30 * * * *", async () => {
+    cron.schedule(`*/${CHECK_EVERY_MINUTES} * * * *`, async () => {
         try {
             await runFuelPriceCheck(client);
         } catch (error) {
