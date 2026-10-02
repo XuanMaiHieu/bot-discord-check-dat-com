@@ -2,6 +2,7 @@
  * Lệnh của module nhắc uống nước:
  *   /uongnuoc          (mọi người) xem / bật / tắt / đổi tần suất
  *   /nuoc-moi          (root) gửi thẻ mời cho user đặc thù, bấm Đăng ký mới bắt đầu nhắc
+ *   /nuoc-thong-bao   (root) báo người đã đăng ký biết nhắc uống nước chuyển sang ml, mỗi người 1 lần
  *   /nuoc-danh-sach    (root) ai đang bật, tần suất, số cốc hôm nay
  *   /nuoc-test         (root) gửi thử tin nhắc / tổng kết / thẻ mời vào DM của root
  */
@@ -13,7 +14,8 @@ const {
     ApplicationIntegrationType,
 } = require("discord.js");
 const store = require("./store");
-const { buildInviteCard } = require("./cards");
+const { buildInviteCard, buildAnnounceCard } = require("./cards");
+const { formatMl } = require("./texts");
 const { settingsPayload } = require("./interactions");
 const { sendReminder, sendSummary } = require("./schedule");
 
@@ -39,6 +41,22 @@ const inviteCommand = rootCommand("nuoc-moi", "[Root] Gửi thẻ mời nhắc u
         option
             .setName("nguoi")
             .setDescription("Tên (có dấu / không dấu) hoặc Discord ID, nhiều người cách nhau bằng dấu phẩy")
+            .setRequired(true)
+    )
+    .toJSON();
+
+const announceCommand = rootCommand(
+    "nuoc-thong-bao",
+    "[Root] Báo người đang bật nhắc uống nước biết đã chuyển sang đếm ml (mỗi người chỉ nhận 1 lần)"
+)
+    .addStringOption((option) =>
+        option
+            .setName("che-do")
+            .setDescription("Gửi cho ai")
+            .addChoices(
+                { name: "Gửi thử vào DM của tôi", value: "thu" },
+                { name: "Gửi cho mọi người đang bật, chưa nhận", value: "tat-ca" }
+            )
             .setRequired(true)
     )
     .toJSON();
@@ -126,6 +144,43 @@ async function handleInvite(interaction, ctx) {
     await interaction.editReply(clip(["💧 **Gửi thẻ mời nhắc uống nước**", ...lines].join("\n")));
 }
 
+async function handleAnnounce(interaction, ctx) {
+    if (await ctx.denyUnlessRoot(interaction)) return;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (interaction.options.getString("che-do") === "thu") {
+        // Thẻ thử dùng dữ liệu của root, nút chạy thật trên dữ liệu của root
+        const member = store.getMember(interaction.user.id) || store.updateMember(interaction.user.id, () => {});
+        const result = await ctx.sendCardToUser(interaction.user.id, buildAnnounceCard(member));
+        await interaction.editReply(result.success ? "🧪 Đã gửi thử vào DM của bạn." : `❌ Không gửi được: ${result.error}`);
+        return;
+    }
+
+    const pending = store.allMembers().filter(({ member }) => member.subscribed && !member.announcedMlAt);
+    const lines = [];
+    for (const { discordId, member } of pending) {
+        const result = await ctx.sendCardToUser(discordId, buildAnnounceCard(member));
+        const name = await nameOf(ctx, discordId);
+        if (result.success) {
+            store.updateMember(discordId, (m) => {
+                m.announcedMlAt = new Date().toISOString();
+            });
+            lines.push(`✅ ${name}`);
+        } else {
+            lines.push(`❌ ${name}: ${result.error}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400)); // giãn cách DM, tránh rate limit
+    }
+    await interaction.editReply(
+        clip(
+            [
+                `💧 **Thông báo chuyển sang ml**: ${lines.filter((l) => l.startsWith("✅")).length}/${pending.length} người`,
+                ...(lines.length ? lines : ["Không còn ai chưa nhận."]),
+            ].join("\n")
+        )
+    );
+}
+
 async function handleList(interaction, ctx) {
     if (await ctx.denyUnlessRoot(interaction)) return;
     // Lấy tên Discord của người không có trong users.json có thể mất vài giây
@@ -141,7 +196,7 @@ async function handleList(interaction, ctx) {
             on.map(async ({ discordId, member }) => {
                 const day = store.today(member);
                 const status = day.off ? " · 🔕 tắt hôm nay" : "";
-                return `• ${await nameOf(ctx, discordId)} · mỗi ${member.interval}' · hôm nay ${day.cups} cốc / ${day.reminders} lần nhắc${status}`;
+                return `• ${await nameOf(ctx, discordId)} · mỗi ${member.interval}' · hôm nay ${formatMl(day.ml)}/${formatMl(member.goalMl)} ml (${day.cups} lần uống) / ${day.reminders} lần nhắc${status}`;
             })
         )),
     ];
@@ -171,6 +226,7 @@ async function handleTest(interaction, ctx) {
 module.exports = [
     { data: userCommand, execute: handleUser },
     { data: inviteCommand, execute: handleInvite },
+    { data: announceCommand, execute: handleAnnounce },
     { data: listCommand, execute: handleList },
     { data: testCommand, execute: handleTest },
 ];

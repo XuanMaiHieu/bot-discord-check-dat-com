@@ -11,8 +11,21 @@ const {
     TextDisplayBuilder,
     SectionBuilder,
 } = require("discord.js");
-const { INTERVALS } = require("./store");
-const { GOAL_CUPS, BUTTONS, REMINDER, summaryText, SETTINGS, INVITE, PROMO } = require("./texts");
+const store = require("./store");
+
+const { INTERVALS, GOALS_ML, CUPS_ML } = store;
+const {
+    DROPS,
+    formatMl,
+    formatVolume,
+    BUTTONS,
+    REMINDER,
+    summaryText,
+    SETTINGS,
+    ANNOUNCE,
+    INVITE,
+    PROMO,
+} = require("./texts");
 
 const PREFIX = "water:";
 const COLOR = 0x0ea5e9; // xanh nước
@@ -28,6 +41,9 @@ const ACTIONS = {
     unsubscribe: `${PREFIX}unsub`,
     decline: `${PREFIX}decline`,
     interval: `${PREFIX}interval`,
+    goal: `${PREFIX}goal`,
+    cup: `${PREFIX}cup`,
+    keepDefaults: `${PREFIX}keep`, // trên thẻ thông báo ml: giữ mặc định, chuyển sang thẻ cài đặt
 };
 
 function text(container, content) {
@@ -38,21 +54,25 @@ function button(customId, label, emoji, style = ButtonStyle.Secondary) {
     return new ButtonBuilder().setCustomId(customId).setLabel(label).setEmoji(emoji).setStyle(style);
 }
 
-// "💧💧💧▫️▫️▫️▫️▫️ Hôm nay: 3/8 cốc"
-function cupsLine(cups) {
-    const filled = Math.min(cups, GOAL_CUPS);
-    const glasses = "💧".repeat(filled) + "▫️".repeat(GOAL_CUPS - filled);
-    return `${glasses} ${REMINDER.today.replace("{cups}", cups).replace("{goal}", GOAL_CUPS)}`;
+// "💧💧💧▫️▫️▫️▫️▫️ Hôm nay: 750/2.000 ml (3 lần uống)"; `stats` = store.progress(member)
+function progressLine({ ml, cups, goalMl }) {
+    const filled = Math.min(DROPS, Math.round((ml / goalMl) * DROPS));
+    const glasses = "💧".repeat(filled) + "▫️".repeat(DROPS - filled);
+    const label = REMINDER.today
+        .replace("{ml}", formatMl(ml))
+        .replace("{goal}", formatMl(goalMl))
+        .replace("{cups}", cups);
+    return `${glasses} ${label}`;
 }
 
 /**
  * Tin nhắc. `status` = câu thay cho câu nhắc sau khi bấm nút (vd "Ngoan! 💙");
  * `buttons: false` khi đã hoãn; `off: true` khi đã tắt hôm nay (chỉ còn nút Bật lại).
  */
-function buildReminderCard({ message, cups, buttons = true, off = false }) {
+function buildReminderCard({ message, stats, buttons = true, off = false }) {
     const container = new ContainerBuilder().setAccentColor(COLOR);
     text(container, `### ${message}`);
-    text(container, cupsLine(cups));
+    text(container, progressLine(stats));
     if (off) {
         container.addActionRowComponents((row) =>
             row.setComponents(button(ACTIONS.resume, BUTTONS.resume, "🔔", ButtonStyle.Primary))
@@ -69,11 +89,32 @@ function buildReminderCard({ message, cups, buttons = true, off = false }) {
     return container;
 }
 
-function buildSummaryCard(cups) {
+function buildSummaryCard(stats) {
     const container = new ContainerBuilder().setAccentColor(COLOR);
-    text(container, summaryText(cups));
-    text(container, cupsLine(cups));
+    text(container, summaryText(stats));
+    text(container, progressLine(stats));
     return container;
+}
+
+// 2 menu: mục tiêu mỗi ngày + ml mỗi lần uống (thẻ cài đặt và thẻ thông báo ml)
+function addAmountMenus(container, member) {
+    const menu = (customId, placeholder, values, labelTemplate, current) =>
+        new StringSelectMenuBuilder()
+            .setCustomId(customId)
+            .setPlaceholder(placeholder)
+            .setOptions(
+                values.map((ml) => ({
+                    label: labelTemplate.replace("{volume}", formatVolume(ml)),
+                    value: String(ml),
+                    default: current === ml,
+                }))
+            );
+    container.addActionRowComponents((row) =>
+        row.setComponents(menu(ACTIONS.goal, SETTINGS.goalPlaceholder, GOALS_ML, SETTINGS.goalLabel, member.goalMl))
+    );
+    container.addActionRowComponents((row) =>
+        row.setComponents(menu(ACTIONS.cup, SETTINGS.cupPlaceholder, CUPS_ML, SETTINGS.cupLabel, member.cupMl))
+    );
 }
 
 // Thẻ cài đặt (/uongnuoc và sau khi đăng ký): trạng thái, chọn tần suất, bật / tắt.
@@ -82,7 +123,7 @@ function buildSettingsCard(member, day) {
     const container = new ContainerBuilder().setAccentColor(COLOR);
     text(container, SETTINGS.title);
     text(container, member?.subscribed ? SETTINGS.on.replace("{interval}", member.interval) : SETTINGS.off);
-    if (member?.subscribed) text(container, cupsLine(day.cups));
+    if (member?.subscribed) text(container, progressLine(store.progress(member)));
     if (member?.subscribed && day.off) {
         container.addSectionComponents((section) =>
             section
@@ -94,6 +135,7 @@ function buildSettingsCard(member, day) {
     container.addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 
     if (member?.subscribed) {
+        addAmountMenus(container, member);
         container.addActionRowComponents((row) =>
             row.setComponents(
                 new StringSelectMenuBuilder()
@@ -132,6 +174,18 @@ function buildInviteCard() {
     return container;
 }
 
+// Thẻ thông báo "đã chuyển sang ml" (/nuoc-thong-bao): chọn ngay trong tin hoặc giữ mặc định
+function buildAnnounceCard(member) {
+    const container = new ContainerBuilder().setAccentColor(COLOR);
+    text(container, ANNOUNCE.title);
+    text(container, ANNOUNCE.body);
+    addAmountMenus(container, member);
+    container.addActionRowComponents((row) =>
+        row.setComponents(button(ACTIONS.keepDefaults, ANNOUNCE.keep, "👌", ButtonStyle.Success))
+    );
+    return container;
+}
+
 // Dòng giới thiệu chèn vào thẻ báo cơm 12h (chữ + nút Đăng ký bên phải)
 function buildPromoSection() {
     return new SectionBuilder()
@@ -145,6 +199,7 @@ module.exports = {
     buildReminderCard,
     buildSummaryCard,
     buildSettingsCard,
+    buildAnnounceCard,
     buildInviteCard,
     buildPromoSection,
 };

@@ -21,6 +21,7 @@ function subscribe(discordId) {
         m.subscribedAt = new Date().toISOString();
         m.declinedAt = null;
         m.failCount = 0;
+        m.announcedMlAt ??= m.subscribedAt; // người mới đã thấy thẻ cài đặt ml, khỏi gửi thông báo
     });
 }
 
@@ -32,10 +33,11 @@ async function handleDrink(interaction, ctx) {
     }
     const member = store.updateMember(interaction.user.id, (m, day) => {
         day.cups += 1;
+        day.ml += m.cupMl;
         day.lastDrinkAt = new Date().toISOString();
         day.snoozeUntil = null;
     });
-    await interaction.update(ctx.cardPayload(buildReminderCard({ message: pick(PRAISES), cups: member.day.cups })));
+    await interaction.update(ctx.cardPayload(buildReminderCard({ message: pick(PRAISES), stats: store.progress(member) })));
 }
 
 async function handleSnooze(interaction, ctx) {
@@ -43,7 +45,7 @@ async function handleSnooze(interaction, ctx) {
         day.snoozeUntil = new Date(Date.now() + SNOOZE_MINUTES * 60 * 1000).toISOString();
     });
     await interaction.update(
-        ctx.cardPayload(buildReminderCard({ message: REMINDER.snoozed, cups: member.day.cups, buttons: false }))
+        ctx.cardPayload(buildReminderCard({ message: REMINDER.snoozed, stats: store.progress(member), buttons: false }))
     );
 }
 
@@ -52,7 +54,7 @@ async function handleOff(interaction, ctx) {
         day.off = true;
     });
     await interaction.update(
-        ctx.cardPayload(buildReminderCard({ message: REMINDER.off, cups: member.day.cups, off: true }))
+        ctx.cardPayload(buildReminderCard({ message: REMINDER.off, stats: store.progress(member), off: true }))
     );
 }
 
@@ -65,7 +67,7 @@ function resumeToday(discordId) {
 
 async function handleResume(interaction, ctx) {
     const member = resumeToday(interaction.user.id);
-    await interaction.update(ctx.cardPayload(buildReminderCard({ message: REMINDER.resumed, cups: member.day.cups })));
+    await interaction.update(ctx.cardPayload(buildReminderCard({ message: REMINDER.resumed, stats: store.progress(member) })));
 }
 
 async function handleResumeHere(interaction, ctx) {
@@ -93,6 +95,23 @@ async function handleUnsubscribe(interaction, ctx) {
     });
     await interaction.update(settingsPayload(ctx, member));
     await interaction.followUp({ content: SETTINGS.unsubscribed, flags: MessageFlags.Ephemeral });
+}
+
+// Chọn mục tiêu / ml mỗi lần uống (thẻ cài đặt hoặc thẻ thông báo ml): lưu rồi đổi thành thẻ cài đặt
+function amountHandler(field, allowed) {
+    return async (interaction, ctx) => {
+        const ml = Number(interaction.values[0]);
+        if (!allowed.includes(ml)) return;
+        const member = store.updateMember(interaction.user.id, (m) => {
+            m[field] = ml;
+        });
+        await interaction.update(settingsPayload(ctx, member));
+    };
+}
+
+// Nút "Giữ mặc định" trên thẻ thông báo ml
+async function handleKeepDefaults(interaction, ctx) {
+    await interaction.update(settingsPayload(ctx, store.getMember(interaction.user.id)));
 }
 
 async function handleDecline(interaction, ctx) {
@@ -123,6 +142,9 @@ const HANDLERS = {
     [ACTIONS.unsubscribe]: handleUnsubscribe,
     [ACTIONS.decline]: handleDecline,
     [ACTIONS.interval]: handleInterval,
+    [ACTIONS.goal]: amountHandler("goalMl", store.GOALS_ML),
+    [ACTIONS.cup]: amountHandler("cupMl", store.CUPS_ML),
+    [ACTIONS.keepDefaults]: handleKeepDefaults,
 };
 
 async function handleInteraction(interaction, ctx) {

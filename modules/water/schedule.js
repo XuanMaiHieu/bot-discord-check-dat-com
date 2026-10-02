@@ -63,8 +63,8 @@ async function sendReplacing(ctx, discordId, card) {
 }
 
 async function sendReminder(ctx, discordId, now = new Date()) {
-    const cups = store.today(store.getMember(discordId), now).cups;
-    const result = await sendReplacing(ctx, discordId, buildReminderCard({ message: pickReminder(), cups }));
+    const stats = store.progress(store.getMember(discordId), now);
+    const result = await sendReplacing(ctx, discordId, buildReminderCard({ message: pickReminder(), stats }));
 
     // Lỗi cũng ghi lastSentAt: thử lại sau 1 chu kỳ, không phải mỗi 5 phút
     const member = store.updateMember(
@@ -95,8 +95,8 @@ async function sendReminder(ctx, discordId, now = new Date()) {
 }
 
 async function sendSummary(ctx, discordId, now = new Date()) {
-    const cups = store.today(store.getMember(discordId), now).cups;
-    const result = await sendReplacing(ctx, discordId, buildSummaryCard(cups));
+    const stats = store.progress(store.getMember(discordId), now);
+    const result = await sendReplacing(ctx, discordId, buildSummaryCard(stats));
     if (!result.success) console.error(`❌ Không gửi được tổng kết uống nước cho ${discordId}: ${result.error}`);
     return result;
 }
