@@ -93,8 +93,8 @@
         },
         {
             "name": "Nguyễn Huyền Trang",
-            "discordId": null,
-            "enabled": false,
+            "discordId": "1132851961516011540",
+            "enabled": true,
             "football_notify": false,
             "order_reminder": false
         },
