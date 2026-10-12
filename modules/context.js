@@ -59,6 +59,8 @@ function createModuleContext(client, deps) {
 
         // Người đang nhận tin cơm 12h (enabled, có Discord ID)
         loadEnabledUsers: () => loadRecipients((user) => user.enabled === true),
+        // Mọi người có Discord ID, kể cả đang tắt nhận tin (dùng cho thông báo chung)
+        loadUsersWithDiscordId: () => loadRecipients(() => true),
         findUserByDiscordId,
 
         // Tính năng có sẵn của bot, để module giới thiệu / mở nhanh
