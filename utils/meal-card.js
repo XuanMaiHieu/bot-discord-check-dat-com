@@ -26,6 +26,9 @@ const MEAL_WEEK_BUTTON_ID = "meal:week";
 
 const EMPTY_MEAL_EMOJI = "⚪";
 
+// Dòng cuối thẻ báo cơm thứ 6 khi thứ 7 không có cơm (dùng cả ở poster)
+const WEEKEND_GREETING = "Yeahh sắp cuối tuần rồi, chúc fen cuối tuần vui vẻ mạnh khỏe nhe, thứ 2 gặp lại!";
+
 // Tối đa số người hiển thị khi /abcom khớp nhiều tên (giới hạn 40 component / 4000 ký tự)
 const MAX_PEOPLE_IN_CARD = 10;
 
@@ -89,12 +92,13 @@ function buildWeekButton() {
  * @param {Date} p.date - Ngày hôm nay
  * @param {string} p.food - Món hôm nay
  * @param {{date: Date, value: string}|null} p.tomorrow - Món ngày mai; null = không hiện dòng này
+ * @param {boolean} p.weekendGreeting - Thứ 6 không có cơm thứ 7: hiện lời chúc cuối tuần
  * @param {string|null} p.posterFileName - Tên file poster đính kèm. Có poster thì thẻ
  *        gồm poster + nút; không có thì thẻ ghi đầy đủ thông tin bằng chữ.
  * @param {Array} p.extras - Component V2 do module chèn thêm (hook lunchCardExtras),
  *        đặt ngay trên hàng nút
  */
-function buildDailyMealCard({ name, date, food, tomorrow = null, posterFileName = null, extras = [] }) {
+function buildDailyMealCard({ name, date, food, tomorrow = null, weekendGreeting = false, posterFileName = null, extras = [] }) {
     const container = new ContainerBuilder().setAccentColor(getWeekdayColor(date));
 
     if (posterFileName) {
@@ -116,6 +120,9 @@ function buildDailyMealCard({ name, date, food, tomorrow = null, posterFileName 
                 ? `${EMPTY_MEAL_EMOJI} **chưa đặt cơm** — nhớ đặt nhé!`
                 : `**${dishInline(tomorrow.value)}**`;
             addText(container, `⏭️ Ngày mai · ${formatShortDay(tomorrow.date)}: ${tomorrowText}`);
+        } else if (weekendGreeting) {
+            addDivider(container);
+            addText(container, `🎉 ${WEEKEND_GREETING}`);
         }
     }
 
@@ -257,6 +264,7 @@ function buildStandupCard({ message, gifUrl, footer = null, date = new Date() })
 
 module.exports = {
     MEAL_WEEK_BUTTON_ID,
+    WEEKEND_GREETING,
     getDishEmoji,
     buildDailyMealCard,
     buildUpcomingMealsCard,

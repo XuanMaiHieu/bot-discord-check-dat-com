@@ -7,6 +7,7 @@ const { WEEKDAY_LONG, WEEKDAY_SHORT, formatDayMonth, isWeekend } = require("./wo
 const { isEmptyMeal } = require("./meal-sheet");
 const { getDishEmoji } = require("./dish-emoji");
 const { loadEmojiImage, truncateToWidth } = require("./poster-kit");
+const { WEEKEND_GREETING } = require("./meal-card");
 
 const WIDTH = 1200;
 const HEIGHT = 520;
@@ -179,6 +180,31 @@ async function drawTomorrow(ctx, tomorrow) {
     ctx.fillText(truncateToWidth(ctx, text, WIDTH - x - 40), x, centerY + 1);
 }
 
+// Thứ 6 không có cơm thứ 7: dải cuối là lời chúc cuối tuần, tự giảm cỡ chữ cho vừa
+async function drawWeekendGreeting(ctx) {
+    const centerY = HEIGHT - FOOTER_HEIGHT / 2;
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.fillRect(0, HEIGHT - FOOTER_HEIGHT, WIDTH, FOOTER_HEIGHT);
+
+    let x = PADDING_LEFT;
+    const icon = await loadEmojiImage("🎉", 80);
+    if (icon) {
+        ctx.drawImage(icon, x, centerY - 20, 40, 40);
+        x += 56;
+    }
+
+    const maxWidth = WIDTH - x - 40;
+    let size = 30;
+    ctx.font = `${size}px "BVP Bold"`;
+    while (size > 22 && ctx.measureText(WEEKEND_GREETING).width > maxWidth) {
+        size -= 2;
+        ctx.font = `${size}px "BVP Bold"`;
+    }
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(truncateToWidth(ctx, WEEKEND_GREETING, maxWidth), x, centerY + 1);
+}
+
 /**
  * Vẽ poster báo cơm, trả về Buffer PNG.
  * @param {object} p
@@ -186,8 +212,9 @@ async function drawTomorrow(ctx, tomorrow) {
  * @param {string} p.name - Tên người đặt
  * @param {Date} p.date - Ngày hôm nay
  * @param {{date: Date, value: string}|null} p.tomorrow - null = không vẽ dải Ngày mai
+ * @param {boolean} p.weekendGreeting - Không có ngày mai thì vẽ dải chúc cuối tuần
  */
-async function renderMealPoster({ dish, name, date, tomorrow = null }) {
+async function renderMealPoster({ dish, name, date, tomorrow = null, weekendGreeting = false }) {
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
     const dishText = String(dish ?? "").replace(/\s+/g, " ").trim();
@@ -198,6 +225,7 @@ async function renderMealPoster({ dish, name, date, tomorrow = null }) {
     drawDish(ctx, dishText);
     drawName(ctx, String(name ?? "").trim());
     if (tomorrow) await drawTomorrow(ctx, tomorrow);
+    else if (weekendGreeting) await drawWeekendGreeting(ctx);
 
     return canvas.encode("png");
 }

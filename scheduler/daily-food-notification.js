@@ -100,6 +100,8 @@ async function runDailyFoodNotification(
     // khi thứ 7 được bật làm bù) VÀ sheet đã có cột ngày mai
     const tomorrow = addDays(date, 1);
     const tomorrowColumn = isWorkingDay(tomorrow) ? findDateColumn(rows, tomorrow) : -1;
+    // Thứ 6 mà thứ 7 không có cơm: thay dòng "Ngày mai" bằng lời chúc cuối tuần
+    const weekendGreeting = date.getDay() === 5 && tomorrowColumn === -1;
 
     const recipients = isTest
         ? recipientsFromIds(targetUserIds)
@@ -152,6 +154,7 @@ async function runDailyFoodNotification(
                     tomorrowColumn === -1
                         ? null
                         : { date: tomorrow, value: getMealAt(rows, nameResult.row, tomorrowColumn) },
+                weekendGreeting,
             },
         });
     }
@@ -166,6 +169,7 @@ async function runDailyFoodNotification(
                 name: meal.name,
                 date: meal.date,
                 tomorrow: meal.tomorrow,
+                weekendGreeting: meal.weekendGreeting,
             }))
         );
     } catch (error) {
