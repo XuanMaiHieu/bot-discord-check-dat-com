@@ -141,13 +141,6 @@
             "order_reminder": false
         },
         {
-            "name": "Nguyễn Như Quỳnh",
-            "discordId": "1171644139947962468",
-            "enabled": true,
-            "football_notify": false,
-            "order_reminder": false
-        },
-        {
             "name": "Lương Đình Dũng",
             "discordId": "897776470259281950",
             "enabled": true,
