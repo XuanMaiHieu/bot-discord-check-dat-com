@@ -6,6 +6,7 @@
  *   /cho-ngoi  nhắc chỗ ngồi (sơ đồ bàn + chỗ của người nhận + giờ, địa điểm, lưu ý gửi xe)
  *   /loi-chuc  thư chúc 20/10, chỉ gửi người có gender "female": phong bì -> bóc thư
  *              ra bưu thiếp + lời chúc -> mở quà ra phiếu quà ngẫu nhiên (nút "ev:")
+ *   /qua-20-10 ai đã nhận thư chúc / bóc thư / trúng phiếu quà nào (root, trả lời ẩn)
  *
  * Mỗi lệnh (root) có:
  *   che-do:thu      gửi thử vào DM của root, không ghi nhận gì
@@ -33,7 +34,7 @@ const {
     buildWishLetterCard,
     findSeat,
 } = require("./cards");
-const { EVENT_ID, SEATING_ID, SEATING_ABSENT, WISH_ID } = require("./texts");
+const { EVENT_ID, SEATING_ID, SEATING_ABSENT, WISH_ID, WISH_VOUCHERS } = require("./texts");
 
 const MAX_REPLY_LENGTH = 1900;
 const SEND_GAP_MS = 400; // giãn cách DM, tránh rate limit
@@ -170,10 +171,27 @@ function wishSigners(ctx) {
     return [...new Set(ctx.loadUsersWithDiscordId().filter((user) => user.gender === "male").map((user) => user.name))];
 }
 
+const WISH_OPENED_KEY = `${WISH_ID}:opened`;
+const WISH_GIFT_KEY = `${WISH_ID}:gift`;
+
+// Phiếu quà của người bấm: đã bốc rồi thì giữ phiếu cũ, chưa thì bốc ngẫu nhiên và lưu lại
+function drawVoucher(discordId) {
+    const existing = store.entries(WISH_GIFT_KEY)[discordId];
+    if (existing && existing.voucher < WISH_VOUCHER_COUNT) return existing.voucher;
+    const voucher = Math.floor(Math.random() * WISH_VOUCHER_COUNT);
+    store.setEntry(WISH_GIFT_KEY, discordId, { voucher, at: new Date().toISOString() });
+    return voucher;
+}
+
 async function handleInteraction(interaction, ctx) {
-    const voucherIndex =
-        interaction.customId === WISH_GIFT_ID ? Math.floor(Math.random() * WISH_VOUCHER_COUNT) : null;
-    if (interaction.customId !== WISH_OPEN_ID && voucherIndex === null) return;
+    if (interaction.customId !== WISH_OPEN_ID && interaction.customId !== WISH_GIFT_ID) return;
+    const discordId = interaction.user.id;
+    let voucherIndex = null;
+    if (interaction.customId === WISH_OPEN_ID) {
+        if (!store.entries(WISH_OPENED_KEY)[discordId]) store.setEntry(WISH_OPENED_KEY, discordId, new Date().toISOString());
+    } else {
+        voucherIndex = drawVoucher(discordId);
+    }
 
     const name = wishRecipientName(interaction, ctx);
     const { card, files } = buildWishLetterCard({ name, signers: wishSigners(ctx), voucherIndex });
@@ -184,14 +202,83 @@ async function handleInteraction(interaction, ctx) {
     );
 }
 
+// ---------------------------------------------------------------------------
+// /qua-20-10: ai đã nhận thư chúc, bóc thư, trúng phiếu gì
+
+const giftReportCommand = new SlashCommandBuilder()
+    .setName("qua-20-10")
+    .setDescription("[Root] Xem ai đã nhận thư chúc 20/10, bóc thư, trúng phiếu quà nào")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
+    .toJSON();
+
+function formatTime(iso) {
+    return `<t:${Math.floor(new Date(iso).getTime() / 1000)}:f>`;
+}
+
+function voucherLabel(index) {
+    const voucher = WISH_VOUCHERS[index];
+    return voucher ? `${voucher.emoji} ${voucher.title}` : `phiếu số ${index + 1}`;
+}
+
+async function handleGiftReport(interaction, ctx) {
+    if (await ctx.denyUnlessRoot(interaction)) return;
+
+    const opened = store.entries(WISH_OPENED_KEY);
+    const gifts = store.entries(WISH_GIFT_KEY);
+    const wishCampaign = CAMPAIGNS.find((campaign) => campaign.id === WISH_ID);
+    const recipients = [
+        ...new Map(
+            ctx
+                .loadUsersWithDiscordId()
+                .filter(wishCampaign.only)
+                .map((user) => [user.discordId, user])
+        ).values(),
+    ];
+    // Người bấm nhưng không nằm trong danh sách nhận (vd root gửi thử)
+    const recipientIds = new Set(recipients.map((user) => user.discordId));
+    const others = [...new Set([...Object.keys(opened), ...Object.keys(gifts)])]
+        .filter((id) => !recipientIds.has(id))
+        .map((id) => ({ discordId: id, name: ctx.findUserByDiscordId(id)?.name || `<@${id}>` }));
+
+    const line = (user) => {
+        const gift = gifts[user.discordId];
+        if (gift) return `🎁 **${user.name}**: ${voucherLabel(gift.voucher)} (${formatTime(gift.at)})`;
+        if (opened[user.discordId]) return `💌 **${user.name}**: đã bóc thư, chưa mở quà`;
+        if (store.hasReceived(WISH_ID, user.discordId)) return `📮 **${user.name}**: đã nhận, chưa bóc thư`;
+        return `⏳ **${user.name}**: chưa gửi`;
+    };
+
+    const tally = new Map();
+    for (const user of recipients) {
+        const gift = gifts[user.discordId];
+        if (gift) tally.set(gift.voucher, (tally.get(gift.voucher) || 0) + 1);
+    }
+    const lines = [
+        `🎁 **Quà 20/10:** ${recipients.filter((u) => gifts[u.discordId]).length}/${recipients.length} chị em đã mở quà`,
+        ...recipients.map(line),
+    ];
+    if (tally.size) {
+        lines.push("", "**Tổng phiếu cần đổi:**");
+        lines.push(...[...tally].sort((a, b) => a[0] - b[0]).map(([index, count]) => `• ${voucherLabel(index)}: ${count}`));
+    }
+    if (others.length) lines.push("", "-# Ngoài danh sách (gửi thử):", ...others.map((user) => `-# ${line(user)}`));
+
+    await interaction.reply({ content: clip(lines.join("\n")), flags: MessageFlags.Ephemeral });
+}
+
 module.exports = {
     name: "event-invite",
     interactionPrefix: PREFIX,
     handleInteraction,
-    commands: CAMPAIGNS.map((campaign) => ({
-        data: buildCommand(campaign),
-        execute: (interaction, ctx) => handleCampaign(campaign, interaction, ctx),
-    })),
+    commands: [
+        ...CAMPAIGNS.map((campaign) => ({
+            data: buildCommand(campaign),
+            execute: (interaction, ctx) => handleCampaign(campaign, interaction, ctx),
+        })),
+        { data: giftReportCommand, execute: handleGiftReport },
+    ],
     start(ctx) {
         store.init(ctx.dataDir("event-invite"));
     },
