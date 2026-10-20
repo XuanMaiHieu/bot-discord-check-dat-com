@@ -195,7 +195,7 @@ module.exports = {
     PREFIX,
     WISH_OPEN_ID,
     WISH_GIFT_ID,
-    WISH_VOUCHER_COUNT: WISH_VOUCHERS.length,
+    WISH_VOUCHER_FILE,
     buildInviteCard,
     buildSeatingCard,
     buildWishEnvelopeCard,

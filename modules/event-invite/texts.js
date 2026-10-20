@@ -104,12 +104,15 @@ const WISH_POSTER = {
     },
 };
 
-// Phiếu quà: mỗi người bốc ngẫu nhiên 1 phiếu. Đổi danh sách thì chạy lại render-poster.js
+// Phiếu quà: mỗi người bốc ngẫu nhiên 1 phiếu. Đổi danh sách thì chạy lại render-poster.js.
+// Đã lưu ai trúng phiếu số mấy nên không xóa / đổi thứ tự phiếu: phiếu bỏ thì thêm
+// replacedBy = vị trí phiếu thay thế, không bốc phiếu đó nữa, ai đã trúng thì
+// /doi-phieu-qua đổi sang phiếu thay thế
 const WISH_VOUCHERS = [
     { emoji: "🧋", title: "1 ly trà sữa", detail: "Anh em mời, chọn size thoải mái" },
     { emoji: "☕", title: "1 ly cà phê sáng", detail: "Anh em pha / mua tận bàn" },
     { emoji: "🍱", title: "Miễn lấy cơm 1 tuần", detail: "Anh em xách cơm tận nơi" },
-    { emoji: "🍜", title: "Chọn quán ăn trưa", detail: "Bữa trưa 1-1, 1 anh trong team mời" },
+    { emoji: "🍜", title: "Chọn quán ăn trưa", detail: "Bữa trưa 1-1, 1 anh trong team mời", replacedBy: 1 },
     { emoji: "🌹", title: "1 bông hồng", detail: "Trao tận tay, kèm 1 câu khen" },
     { emoji: "🎂", title: "1 phần bánh ngọt", detail: "Giao tận bàn giờ xế chiều" },
 ];

@@ -7,6 +7,8 @@
  *   /loi-chuc  thư chúc 20/10, chỉ gửi người có gender "female": phong bì -> bóc thư
  *              ra bưu thiếp + lời chúc -> mở quà ra phiếu quà ngẫu nhiên (nút "ev:")
  *   /qua-20-10 ai đã nhận thư chúc / bóc thư / trúng phiếu quà nào (root, trả lời ẩn)
+ *   /doi-phieu-qua  ai đang giữ phiếu đã bỏ (replacedBy trong texts.js) thì sửa tin
+ *              trong DM sang phiếu thay thế
  *
  * Mỗi lệnh (root) có:
  *   che-do:thu      gửi thử vào DM của root, không ghi nhận gì
@@ -27,7 +29,7 @@ const {
     PREFIX,
     WISH_OPEN_ID,
     WISH_GIFT_ID,
-    WISH_VOUCHER_COUNT,
+    WISH_VOUCHER_FILE,
     buildInviteCard,
     buildSeatingCard,
     buildWishEnvelopeCard,
@@ -174,11 +176,17 @@ function wishSigners(ctx) {
 const WISH_OPENED_KEY = `${WISH_ID}:opened`;
 const WISH_GIFT_KEY = `${WISH_ID}:gift`;
 
-// Phiếu quà của người bấm: đã bốc rồi thì giữ phiếu cũ, chưa thì bốc ngẫu nhiên và lưu lại
+// Phiếu còn bốc được (bỏ phiếu có replacedBy)
+const ACTIVE_VOUCHERS = WISH_VOUCHERS.map((voucher, index) => index).filter(
+    (index) => WISH_VOUCHERS[index].replacedBy === undefined
+);
+
+// Phiếu quà của người bấm: đã bốc rồi thì giữ phiếu cũ (phiếu đã bỏ thì lấy phiếu
+// thay thế), chưa thì bốc ngẫu nhiên và lưu lại
 function drawVoucher(discordId) {
     const existing = store.entries(WISH_GIFT_KEY)[discordId];
-    if (existing && existing.voucher < WISH_VOUCHER_COUNT) return existing.voucher;
-    const voucher = Math.floor(Math.random() * WISH_VOUCHER_COUNT);
+    if (existing && WISH_VOUCHERS[existing.voucher]) return WISH_VOUCHERS[existing.voucher].replacedBy ?? existing.voucher;
+    const voucher = ACTIVE_VOUCHERS[Math.floor(Math.random() * ACTIVE_VOUCHERS.length)];
     store.setEntry(WISH_GIFT_KEY, discordId, { voucher, at: new Date().toISOString() });
     return voucher;
 }
@@ -268,6 +276,82 @@ async function handleGiftReport(interaction, ctx) {
     await interaction.reply({ content: clip(lines.join("\n")), flags: MessageFlags.Ephemeral });
 }
 
+// ---------------------------------------------------------------------------
+// /doi-phieu-qua: người đang giữ phiếu đã bỏ -> sửa tin trong DM sang phiếu thay
+// thế + cập nhật dữ liệu. Không lưu mã tin nên dò trong các tin gần nhất của DM
+
+const SWAP_SCAN_LIMIT = 50; // số tin gần nhất trong DM để dò
+
+const swapCommand = new SlashCommandBuilder()
+    .setName("doi-phieu-qua")
+    .setDescription("[Root] Đổi phiếu quà 20/10 đã bỏ sang phiếu thay thế, sửa luôn tin trong DM")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
+    .setIntegrationTypes([ApplicationIntegrationType.GuildInstall])
+    .addStringOption((option) =>
+        option
+            .setName("che-do")
+            .setDescription("Xem trước hay đổi thật")
+            .addChoices(
+                { name: "Xem trước ai sẽ được đổi phiếu", value: "xem" },
+                { name: "Đổi thật, sửa tin trong DM", value: "doi" }
+            )
+            .setRequired(true)
+    )
+    .toJSON();
+
+// Tin thư chúc đã mở quà (có ảnh phiếu) của bot trong 1 DM
+async function findGiftMessages(ctx, discordId) {
+    const user = await ctx.client.users.fetch(discordId);
+    const channel = await user.createDM();
+    const messages = await channel.messages.fetch({ limit: SWAP_SCAN_LIMIT });
+    return [...messages.values()].filter(
+        (message) =>
+            message.author.id === ctx.client.user.id &&
+            // Gửi xong Discord đổi attachment://<tên> thành link CDN .../<tên>?...
+            message.components.some((c) => JSON.stringify(c.toJSON()).includes(`/${WISH_VOUCHER_FILE}?`))
+    );
+}
+
+async function handleSwap(interaction, ctx) {
+    if (await ctx.denyUnlessRoot(interaction)) return;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const dryRun = interaction.options.getString("che-do") === "xem";
+
+    const gifts = store.entries(WISH_GIFT_KEY);
+    const targets = Object.entries(gifts).filter(([, gift]) => WISH_VOUCHERS[gift.voucher]?.replacedBy !== undefined);
+    const signers = wishSigners(ctx);
+    const lines = [];
+    let swapped = 0;
+    for (const [discordId, gift] of targets) {
+        const name = ctx.findUserByDiscordId(discordId)?.name || `<@${discordId}>`;
+        const voucher = WISH_VOUCHERS[gift.voucher].replacedBy;
+        const change = `${voucherLabel(gift.voucher)} → ${voucherLabel(voucher)}`;
+        try {
+            const messages = await findGiftMessages(ctx, discordId);
+            if (!messages.length) {
+                lines.push(`⚠️ ${name}: ${change}, không tìm thấy tin trong DM`);
+                continue;
+            }
+            if (!dryRun) {
+                const { card, files } = buildWishLetterCard({ name, signers, voucherIndex: voucher });
+                for (const message of messages) await message.edit({ components: [card], files, attachments: [] });
+                store.setEntry(WISH_GIFT_KEY, discordId, { ...gift, voucher, replaced: gift.voucher });
+            }
+            swapped += 1;
+            lines.push(`${dryRun ? "🔁" : "✅"} ${name}: ${change}`);
+        } catch (error) {
+            lines.push(`❌ ${name}: ${error.message}`);
+        }
+    }
+
+    console.log(`🔁 Đổi phiếu quà 20/10: ${swapped} người${dryRun ? " (xem trước)" : ""}`);
+    const header = dryRun
+        ? `👀 **Xem trước:** ${swapped} người sẽ được đổi phiếu, chọn \`doi\` để đổi thật`
+        : `🔁 **Đã đổi phiếu** cho ${swapped} người`;
+    await interaction.editReply(clip([header, ...(lines.length ? lines : ["Không ai đang giữ phiếu đã bỏ."])].join("\n")));
+}
+
 module.exports = {
     name: "event-invite",
     interactionPrefix: PREFIX,
@@ -278,6 +362,7 @@ module.exports = {
             execute: (interaction, ctx) => handleCampaign(campaign, interaction, ctx),
         })),
         { data: giftReportCommand, execute: handleGiftReport },
+        { data: swapCommand, execute: handleSwap },
     ],
     start(ctx) {
         store.init(ctx.dataDir("event-invite"));
