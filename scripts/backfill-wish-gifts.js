@@ -8,8 +8,11 @@
  * rồi điền vào data/event-invite/sent.json những người chưa có (không ghi đè ai).
  * Giờ bóc / mở không có trong log nên ghi giờ chạy script.
  *
- *   node scripts/backfill-wish-gifts.js          xem trước
- *   node scripts/backfill-wish-gifts.js --ghi    ghi thật
+ *   node scripts/backfill-wish-gifts.js [file log] [--ghi]
+ *
+ * Mặc định đọc logs/out.log, thiếu --ghi thì chỉ xem trước. Bot chạy pm2 không
+ * qua ecosystem.config.js thì log ở chỗ khác, tìm bằng:
+ *   pm2 describe bot-check-dat-com | grep "out log path"
  *
  * Bot đang chạy cũng ghi file này, nên ghi xong không cần restart.
  */
@@ -18,7 +21,7 @@ const path = require("path");
 const { loadUsers } = require("../utils/users");
 const { WISH_ID, WISH_VOUCHERS } = require("../modules/event-invite/texts");
 
-const LOG_FILE = path.join(__dirname, "../logs/out.log");
+const LOG_FILE = process.argv.slice(2).find((arg) => arg !== "--ghi") || path.join(__dirname, "../logs/out.log");
 const STORE_FILE = path.join(__dirname, "../data/event-invite/sent.json");
 const OPENED_KEY = `${WISH_ID}:opened`;
 const GIFT_KEY = `${WISH_ID}:gift`;
