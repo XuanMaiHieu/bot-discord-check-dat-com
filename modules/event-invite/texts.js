@@ -109,7 +109,7 @@ const WISH_VOUCHERS = [
     { emoji: "🧋", title: "1 ly trà sữa", detail: "Anh em mời, chọn size thoải mái" },
     { emoji: "☕", title: "1 ly cà phê sáng", detail: "Anh em pha / mua tận bàn" },
     { emoji: "🍱", title: "Miễn lấy cơm 1 tuần", detail: "Anh em xách cơm tận nơi" },
-    { emoji: "🍜", title: "Chọn quán ăn trưa", detail: "1 buổi, cả team đi theo" },
+    { emoji: "🍜", title: "Chọn quán ăn trưa", detail: "Bữa trưa 1-1, 1 anh trong team mời" },
     { emoji: "🌹", title: "1 bông hồng", detail: "Trao tận tay, kèm 1 câu khen" },
     { emoji: "🎂", title: "1 phần bánh ngọt", detail: "Giao tận bàn giờ xế chiều" },
 ];
