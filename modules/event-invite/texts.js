@@ -79,4 +79,81 @@ const SEATING = {
         "Đi xe cá nhân thì có thể liên hệ bảo vệ để được gửi xe tại nhà xe (miễn phí)",
 };
 
-module.exports = { EVENT_ID, START_AT, MAP_URL, POSTER, INVITE, SEATING_ID, SEATING_ABSENT, TABLES, SEATING_POSTER, SEATING };
+// ---------------------------------------------------------------------------
+// Thư chúc 20/10 (/loi-chuc), chỉ gửi người có gender "female" trong users.json.
+// 3 bước trong cùng 1 tin: phong bì -> bấm bóc thư ra bưu thiếp + lời chúc ->
+// bấm tiếp hiện phiếu quà (ảnh spoiler, chạm vào mới thấy, như cào vé)
+
+const WISH_ID = "20-10-2026-wish";
+
+// Chữ trên ảnh phong bì + bưu thiếp
+const WISH_POSTER = {
+    from: "Người gửi: Cánh đàn ông vụng về",
+    to: ["Gửi: Một nửa thế giới", "Team ABC thân yêu"],
+    seal: "20·10",
+    stamp: "20·10",
+    postmark: ["HÀ NỘI", "20.10.2026"],
+    postcard: {
+        hello: "Chúc mừng",
+        date: "20 · 10",
+        title: "NGÀY PHỤ NỮ VIỆT NAM",
+        subtitle: "Kỷ niệm 96 năm · 1930 – 2026",
+        fromLabel: "Thân gửi từ",
+        from: "cánh đàn ông vụng về",
+        lines: ["Gửi: Một nửa thế giới", "Team ABC thân yêu", "Mãi mạnh mẽ & rạng rỡ"],
+    },
+};
+
+// Phiếu quà: mỗi người bốc ngẫu nhiên 1 phiếu. Đổi danh sách thì chạy lại render-poster.js
+const WISH_VOUCHERS = [
+    { emoji: "🧋", title: "1 ly trà sữa", detail: "Anh em mời, chọn size thoải mái" },
+    { emoji: "☕", title: "1 ly cà phê sáng", detail: "Anh em pha / mua tận bàn" },
+    { emoji: "🍱", title: "Miễn lấy cơm 1 tuần", detail: "Anh em xách cơm tận nơi" },
+    { emoji: "🍜", title: "Chọn quán ăn trưa", detail: "1 buổi, cả team đi theo" },
+    { emoji: "🌹", title: "1 bông hồng", detail: "Trao tận tay, kèm 1 câu khen" },
+    { emoji: "🎂", title: "1 phần bánh ngọt", detail: "Giao tận bàn giờ xế chiều" },
+];
+const WISH_VOUCHER_FOOTER = "Đổi với bất kỳ anh nào trong team ABC · HSD 31/12/2026";
+
+// {name} = họ tên người nhận, {signers} = họ tên các anh em
+const WISH = {
+    envelopeAlt: "Phong bì dán tem 20/10, niêm phong sáp đỏ",
+    postcardAlt: "Bưu thiếp chúc mừng Ngày Phụ nữ Việt Nam 20/10",
+    voucherAlt: "Phiếu quà 20/10",
+    envelopeTitle: "## 📮 Có thư cho bạn!",
+    envelopeText:
+        "Bưu tá bot vừa giao tới **{name}** 1 lá thư dán tem 20/10, niêm phong cẩn thận lắm. " +
+        "Người gửi giấu tên, chỉ ghi _\"cánh đàn ông vụng về\"_… 🤫",
+    openButton: "Bóc thư",
+    letterTitle: "## 💐 Gửi {name}",
+    letter:
+        "> Thay mặt cánh đàn ông vụng về gửi tới 1 nửa thế giới,\n" +
+        "> \n" +
+        "> Nhân một buổi sáng thứ 3 đẹp trời và cũng thật tuyệt khi hôm nay là kỉ niệm 96 năm ngày phụ nữ Việt Nam, " +
+        "một lời chúc ngọt ngào chắc chắn sẽ làm cho chị em thêm rực rỡ hơn nữa. " +
+        "Chúc cho chị em chúng ta luôn luôn mạnh mẽ, mãi mãi trẻ trung, ngày càng rạng rỡ. " +
+        "Chúc chị em sẽ sớm đạt được những thành công cho riêng mình. " +
+        "Cám ơn chị em đã đang và sẽ mãi là một phần không thể thiếu của team ABC chúng ta.",
+    signers: "✍️ **Đồng ký tên:** {signers}",
+    giftButton: "Trong phong bì còn 1 thứ nữa…",
+    giftTitle: "### 🎫 Phiếu quà bí mật",
+    giftText: "Chạm vào ảnh bên dưới để **cào** phiếu nhé ✨ Chụp màn hình lại rồi đưa anh nào trong team để đổi quà!",
+};
+
+module.exports = {
+    EVENT_ID,
+    START_AT,
+    MAP_URL,
+    POSTER,
+    INVITE,
+    SEATING_ID,
+    SEATING_ABSENT,
+    TABLES,
+    SEATING_POSTER,
+    SEATING,
+    WISH_ID,
+    WISH_POSTER,
+    WISH_VOUCHERS,
+    WISH_VOUCHER_FOOTER,
+    WISH,
+};

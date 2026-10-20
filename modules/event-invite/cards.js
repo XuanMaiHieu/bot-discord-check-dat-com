@@ -2,6 +2,8 @@
  * Thẻ Components V2 của sự kiện, ảnh vẽ sẵn bằng render-poster.js:
  *   thiệp mời     - poster.png + lời mời + nút mở bản đồ
  *   nhắc chỗ ngồi - seating.png + chỗ của người nhận + giờ, địa điểm, lưu ý gửi xe
+ *   thư chúc      - wish-envelope.png + nút bóc thư -> wish-postcard.png + lời chúc
+ *                   + nút quà -> thêm wish-voucher-N.png dạng spoiler (chạm để cào)
  */
 const path = require("path");
 const {
@@ -12,7 +14,7 @@ const {
     SeparatorSpacingSize,
     escapeMarkdown,
 } = require("discord.js");
-const { START_AT, MAP_URL, INVITE, TABLES, SEATING } = require("./texts");
+const { START_AT, MAP_URL, INVITE, TABLES, SEATING, WISH, WISH_VOUCHERS } = require("./texts");
 
 const COLOR = 0xe11d74; // hồng, cùng tông ảnh bìa
 const SEATING_COLOR = 0xe63b2a; // đỏ, cùng tông ảnh sơ đồ chỗ ngồi
@@ -122,4 +124,81 @@ function buildSeatingCard({ name, seat }) {
     return { card: container, files: [new AttachmentBuilder(SEATING_PATH, { name: SEATING_FILE_NAME })] };
 }
 
-module.exports = { buildInviteCard, buildSeatingCard, findSeat };
+// ---------------------------------------------------------------------------
+
+const PREFIX = "ev:";
+const WISH_OPEN_ID = `${PREFIX}wish-open`;
+const WISH_GIFT_ID = `${PREFIX}wish-gift`;
+const WISH_COLOR = 0xc1121f; // đỏ viền thư máy bay
+const WISH_ENVELOPE_FILE = "phong-bi-20-10.png";
+const WISH_POSTCARD_FILE = "buu-thiep-20-10.png";
+const WISH_VOUCHER_FILE = "phieu-qua-20-10.png";
+
+function image(container, fileName, description, spoiler = false) {
+    container.addMediaGalleryComponents((g) =>
+        g.addItems((item) => item.setURL(`attachment://${fileName}`).setDescription(description).setSpoiler(spoiler))
+    );
+}
+
+function buttonRow(container, button) {
+    container.addActionRowComponents((row) => row.setComponents(button));
+}
+
+// Bước 1: phong bì niêm phong + nút bóc thư
+function buildWishEnvelopeCard({ name }) {
+    const container = new ContainerBuilder().setAccentColor(WISH_COLOR);
+    image(container, WISH_ENVELOPE_FILE, WISH.envelopeAlt);
+    text(container, WISH.envelopeTitle);
+    text(container, WISH.envelopeText.replace("{name}", escapeMarkdown(name)));
+    buttonRow(
+        container,
+        new ButtonBuilder().setCustomId(WISH_OPEN_ID).setLabel(WISH.openButton).setEmoji("💌").setStyle(ButtonStyle.Danger)
+    );
+    const files = [new AttachmentBuilder(path.join(__dirname, "wish-envelope.png"), { name: WISH_ENVELOPE_FILE })];
+    return { card: container, files };
+}
+
+/**
+ * Bước 2 (voucherIndex = null): bưu thiếp + lời chúc + nút quà.
+ * Bước 3: như bước 2, thay nút quà bằng phiếu quà số voucherIndex (ảnh spoiler).
+ * @param {object} p
+ * @param {string} p.name - họ tên người nhận
+ * @param {string[]} p.signers - họ tên các anh em đồng ký tên
+ * @param {number | null} p.voucherIndex - vị trí trong WISH_VOUCHERS
+ */
+function buildWishLetterCard({ name, signers, voucherIndex = null }) {
+    const container = new ContainerBuilder().setAccentColor(WISH_COLOR);
+    image(container, WISH_POSTCARD_FILE, WISH.postcardAlt);
+    text(container, WISH.letterTitle.replace("{name}", escapeMarkdown(name)));
+    text(container, WISH.letter);
+    if (signers.length) text(container, WISH.signers.replace("{signers}", signers.map(escapeMarkdown).join(" · ")));
+
+    const files = [new AttachmentBuilder(path.join(__dirname, "wish-postcard.png"), { name: WISH_POSTCARD_FILE })];
+    divider(container);
+    if (voucherIndex === null) {
+        buttonRow(
+            container,
+            new ButtonBuilder().setCustomId(WISH_GIFT_ID).setLabel(WISH.giftButton).setEmoji("🎁").setStyle(ButtonStyle.Success)
+        );
+    } else {
+        text(container, WISH.giftTitle);
+        text(container, WISH.giftText);
+        image(container, WISH_VOUCHER_FILE, WISH.voucherAlt, true);
+        files.push(
+            new AttachmentBuilder(path.join(__dirname, `wish-voucher-${voucherIndex + 1}.png`), { name: WISH_VOUCHER_FILE })
+        );
+    }
+    return { card: container, files };
+}
+
+module.exports = {
+    PREFIX,
+    WISH_OPEN_ID,
+    WISH_GIFT_ID,
+    WISH_VOUCHER_COUNT: WISH_VOUCHERS.length,
+    buildInviteCard,
+    buildSeatingCard,
+    buildWishEnvelopeCard,
+    buildWishLetterCard,
+    findSeat,
+};
