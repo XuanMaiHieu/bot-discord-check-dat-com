@@ -12,6 +12,8 @@
  *
  * Mỗi lệnh (root) có:
  *   che-do:thu      gửi thử vào DM của root, không ghi nhận gì
+ *   che-do:mot-nguoi + discord-id  gửi thật cho 1 Discord ID bất kỳ (kể cả không có
+ *                   trong users.json / không thuộc đợt đó), ghi nhận là đã nhận
  *   che-do:tat-ca   gửi thật cho mọi người chưa nhận đợt đó; chạy lại chỉ gửi
  *                   người còn thiếu / gửi lỗi
  *
@@ -82,9 +84,13 @@ function buildCommand(campaign) {
                 .setDescription("Gửi cho ai")
                 .addChoices(
                     { name: "Gửi thử vào DM của tôi", value: "thu" },
-                    { name: "Gửi thật cho mọi người có Discord ID, chưa nhận", value: "tat-ca" }
+                    { name: "Gửi thật cho mọi người có Discord ID, chưa nhận", value: "tat-ca" },
+                    { name: "Gửi thật cho 1 người (điền discord-id)", value: "mot-nguoi" }
                 )
                 .setRequired(true)
+        )
+        .addStringOption((option) =>
+            option.setName("discord-id").setDescription("Discord ID người nhận, dùng với che-do: mot-nguoi")
         )
         .toJSON();
 }
@@ -96,6 +102,35 @@ function clip(content) {
 async function send(ctx, campaign, user, allNames) {
     const { card, files } = campaign.build(user, allNames);
     return ctx.sendCardToUser(user.discordId, card, { files });
+}
+
+// Gửi thật cho 1 Discord ID bất kỳ. Tên lấy theo users.json, không có thì tên Discord
+async function sendToOne(campaign, interaction, ctx, allNames) {
+    const discordId = interaction.options.getString("discord-id")?.trim();
+    if (!/^\d{17,20}$/.test(discordId || "")) {
+        await interaction.editReply("❌ Chọn `mot-nguoi` thì điền `discord-id` (dãy 17-20 chữ số).");
+        return;
+    }
+    let name = ctx.findUserByDiscordId(discordId)?.name;
+    if (!name) {
+        try {
+            const user = await ctx.client.users.fetch(discordId);
+            name = user.globalName || user.username;
+        } catch (error) {
+            await interaction.editReply(`❌ Không tìm thấy Discord ID \`${discordId}\`: ${error.message}`);
+            return;
+        }
+    }
+
+    const received = store.hasReceived(campaign.id, discordId);
+    const result = await send(ctx, campaign, { discordId, name }, allNames);
+    if (!result.success) {
+        await interaction.editReply(`❌ Không gửi được cho ${name}: ${result.error}`);
+        return;
+    }
+    store.markSent(campaign.id, discordId);
+    console.log(`💌 ${campaign.id}: gửi riêng cho ${name} (${discordId})`);
+    await interaction.editReply(`✅ ${campaign.label}: đã gửi cho **${name}**${received ? " (người này đã nhận từ trước, đây là bản gửi lại)" : ""}`);
 }
 
 async function handleCampaign(campaign, interaction, ctx) {
@@ -128,6 +163,11 @@ async function handleCampaign(campaign, interaction, ctx) {
                 ? `🧪 Đã gửi thử vào DM của bạn. Gửi thật sẽ tới ${recipients.length} người trong \`data/users.json\`.`
                 : `❌ Không gửi được: ${result.error}`
         );
+        return;
+    }
+
+    if (interaction.options.getString("che-do") === "mot-nguoi") {
+        await sendToOne(campaign, interaction, ctx, allNames);
         return;
     }
 
