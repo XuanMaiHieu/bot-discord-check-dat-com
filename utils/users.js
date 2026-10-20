@@ -4,6 +4,7 @@
  *
  * Các trường của 1 user:
  *   name            - họ tên đúng như cột C trên sheet
+ *   gender          - "male" | "female"
  *   discordId       - null = chưa có, bot bỏ qua người này
  *   enabled         - nhận tin cơm 12h + nhắc đứng dậy
  *   order_reminder  - nhận nhắc đặt cơm thứ 2 (thiếu = có nhận)
